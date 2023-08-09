@@ -1,5 +1,8 @@
+using CairoMakie
+using MintsMakieRecipes
+set_theme!(mints_theme)
+
 using CSV, DataFrames
-using Plots
 using TimeSeriesTools
 using ParameterHandling
 using Dates, TimeZones

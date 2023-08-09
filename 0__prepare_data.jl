@@ -1,18 +1,20 @@
 using Pkg
-#Pkg.add(url="https://github.com/john-waczak/TimeSeriesTools.jl")
-Pkg.add(url="https://github.com/john-waczak/TimeSeriesTools.jl.git")
 
+# make sure we update our copy of the repos:
+Pkg.add(url="https://github.com/john-waczak/TimeSeriesTools.jl.git")
+Pkg.add(url="https://github.com/mi3nts/MintsMakieRecipes.jl.git")
+
+using CairoMakie
+using MintsMakieRecipes
+set_theme!(mints_theme)
 
 using TimeSeriesTools
 using CSV, DataFrames
 using DifferentialEquations
 using Dates, TimeZones
-
 using DataInterpolations
-#using Interpolations
 using StaticArrays
 using Statistics
-using Plots
 
 include("utils.jl")
 
@@ -40,8 +42,8 @@ bme_links = [
 
 
 # test_df = CSV.File(download(ips_links[1])) |> DataFrame
-
 dfs = [CSV.File(download(url)) |> DataFrame for url ∈ ips_links];
+
 
 println("---")
 println("IPS7100")
@@ -52,7 +54,10 @@ for i ∈ 1:length(dfs)
     println(dfs[i].dateTime[1], "\t", dfs[i].dateTime[end])
 end
 
+
 df_ips7100 = vcat(dfs...);
+
+df_ips7100
 
 
 dfs = [CSV.File(download(url)) |> DataFrame for url ∈ bme_links];
@@ -109,20 +114,6 @@ for col_name ∈ ["temperature", "pressure", "humidity"]
 end
 
 names(df_out)
-
-
-# plot(df_out.t ./ (60^2*24), df_out.pm2_5, label="")
-# plot!(
-#     twinx(),
-#     df_out.t ./ (60^2 * 24),
-#     df_out.humidity,
-#     color=:red,
-#     alpha=0.5,
-#     lw=2,
-#     label=""
-# )
-# #xlims!(2,2.4)
-
 
 # save the file
 if !ispath("data/sharedair")
