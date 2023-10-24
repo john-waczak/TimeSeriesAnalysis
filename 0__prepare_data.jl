@@ -1,14 +1,27 @@
 using Pkg
 
 # make sure we update our copy of the repos:
-Pkg.add(url="https://github.com/john-waczak/TimeSeriesTools.jl.git")
-Pkg.add(url="https://github.com/mi3nts/MintsMakieRecipes.jl.git")
+# Pkg.add(url="https://github.com/john-waczak/TimeSeriesTools.jl.git")
+# using TimeSeriesTools
 
 using CairoMakie
 using MintsMakieRecipes
 set_theme!(mints_theme)
+update_theme!(
+    figure_padding=30,
+    Axis=(
+        xticklabelsize=20,
+        yticklabelsize=20,
+        xlabelsize=22,
+        ylabelsize=22,
+        titlesize=25,
+    ),
+    Colorbar=(
+        ticklabelsize=20,
+        labelsize=22
+    )
+)
 
-using TimeSeriesTools
 using CSV, DataFrames
 using DifferentialEquations
 using Dates, TimeZones
@@ -21,6 +34,9 @@ include("utils.jl")
 # # Download Data from OSN
 
 ips_links = [
+    "https://ncsa.osn.xsede.org/ees230012-bucket01/AirQualityNetwork/data/raw/Central_Hub_4/2023/05/29/MINTS_001e06373996_IPS7100_2023_05_29.csv",
+    "https://ncsa.osn.xsede.org/ees230012-bucket01/AirQualityNetwork/data/raw/Central_Hub_4/2023/05/30/MINTS_001e06373996_IPS7100_2023_05_30.csv",
+    "https://ncsa.osn.xsede.org/ees230012-bucket01/AirQualityNetwork/data/raw/Central_Hub_4/2023/05/31/MINTS_001e06373996_IPS7100_2023_05_31.csv",
     "https://ncsa.osn.xsede.org/ees230012-bucket01/AirQualityNetwork/data/raw/Central_Hub_4/2023/06/01/MINTS_001e06373996_IPS7100_2023_06_01.csv",
     "https://ncsa.osn.xsede.org/ees230012-bucket01/AirQualityNetwork/data/raw/Central_Hub_4/2023/06/02/MINTS_001e06373996_IPS7100_2023_06_02.csv",
     "https://ncsa.osn.xsede.org/ees230012-bucket01/AirQualityNetwork/data/raw/Central_Hub_4/2023/06/03/MINTS_001e06373996_IPS7100_2023_06_03.csv",
@@ -31,6 +47,9 @@ ips_links = [
 ]
 
 bme_links = [
+    "https://ncsa.osn.xsede.org/ees230012-bucket01/AirQualityNetwork/data/raw/Central_Hub_4/2023/05/29/MINTS_001e06373996_BME680_2023_05_29.csv",
+    "https://ncsa.osn.xsede.org/ees230012-bucket01/AirQualityNetwork/data/raw/Central_Hub_4/2023/05/30/MINTS_001e06373996_BME680_2023_05_30.csv",
+    "https://ncsa.osn.xsede.org/ees230012-bucket01/AirQualityNetwork/data/raw/Central_Hub_4/2023/05/31/MINTS_001e06373996_BME680_2023_05_31.csv",
     "https://ncsa.osn.xsede.org/ees230012-bucket01/AirQualityNetwork/data/raw/Central_Hub_4/2023/06/01/MINTS_001e06373996_BME680_2023_06_01.csv",
     "https://ncsa.osn.xsede.org/ees230012-bucket01/AirQualityNetwork/data/raw/Central_Hub_4/2023/06/02/MINTS_001e06373996_BME680_2023_06_02.csv",
     "https://ncsa.osn.xsede.org/ees230012-bucket01/AirQualityNetwork/data/raw/Central_Hub_4/2023/06/03/MINTS_001e06373996_BME680_2023_06_03.csv",
@@ -42,7 +61,8 @@ bme_links = [
 
 
 # test_df = CSV.File(download(ips_links[1])) |> DataFrame
-dfs = [CSV.File(download(url)) |> DataFrame for url ∈ ips_links];
+@info "Downloading data files from OSN..."
+dfs = [CSV.read(download(url), DataFrame) for url ∈ ips_links];
 
 
 println("---")
@@ -56,8 +76,6 @@ end
 
 
 df_ips7100 = vcat(dfs...);
-
-df_ips7100
 
 
 dfs = [CSV.File(download(url)) |> DataFrame for url ∈ bme_links];
@@ -77,11 +95,8 @@ df_bme680 = vcat(dfs...);
 dfs = nothing
 GC.gc()
 
-# find indices of rows in IP7100 between start and end time of BME680
-idx₀ = findfirst((df_ips7100.dateTime .- df_bme680.dateTime[1]) .> Millisecond(0))
-idx_end = findfirst((df_ips7100.dateTime .- df_bme680.dateTime[end]) .> Millisecond(0))
 
-# chop IPS7100 to those values
+# chop IPS7100 to those values. Ignore particle counts
 names_to_drop = [n for n ∈ names(df_ips7100) if occursin("pc", n)]
 df_ips7100 = df_ips7100[idx₀:idx_end, Not(names_to_drop)]
 df_bme680 = df_bme680[:, Not(["gas"])]
@@ -92,14 +107,31 @@ t₀ = df_ips7100.dateTime[1]
 df_ips7100.t = round.(Int, Dates.value.(df_ips7100.dateTime .- t₀) ./ 1000)
 df_bme680.t = round.(Int, Dates.value.(df_bme680.dateTime .- t₀) ./ 1000)
 
+df_bme680.t[1]
+df_bme680.t[end]
+
+df_ips7100.t[1]
+df_ips7100.t[end]
+
+
+# find indices of rows in IP7100 between start and end time of BME680
+idx₀ = findfirst((df_ips7100.t .- df_bme680.t[1]) .> 0)
+idx_end = findfirst((df_ips7100.t .- df_bme680.t[end]) .≥ 0)
+if isnothing(idx_end)
+    idx_end = nrow(df_ips7100)
+end
+
+df_ips7100 = df_ips7100[idx₀:idx_end, :]
+
+df_ips7100.t[end]
+df_bme680.t[end]
 
 maximum(df_ips7100.t[2:end] .- df_ips7100.t[1:end-1])
 # so clearly we should impute to a regular grid
 
+
 df_out = DataFrame()
 df_out.t = df_ips7100.t[1]:df_ips7100.t[end]
-
-
 
 for col_name ∈ names(df_ips7100)
     if col_name ∉ ["dateTime", "t"]
@@ -108,6 +140,7 @@ for col_name ∈ names(df_ips7100)
     end
 end
 
+
 for col_name ∈ ["temperature", "pressure", "humidity"]
     f = CubicSpline(df_bme680[:, col_name], df_bme680.t)
     df_out[!, col_name] = f.(df_out.t)
@@ -115,11 +148,54 @@ end
 
 names(df_out)
 
+df_out.t = df_out.t .- df_out.t[1]
+df_out.dateTime = df_ips7100.dateTime[1] .+ Second.(df_out.t)
+
+
 # save the file
 if !ispath("data/sharedair")
     mkpath("data/sharedair")
 end
 CSV.write("data/sharedair/data.csv", df_out)
+
+
+# let's make some preliminary visualizations
+
+df_out.dateTime
+df_out.pm2_5
+
+fig = Figure();
+ax = Axis(fig[1,1], xlabel="days since $(df_out.dateTime[1])", ylabel="Concentration [μg/m³]");
+
+l3 = lines!(ax, df_out.t ./ (60*60*24), df_out.pm10_0, alpha=0.8)
+l2 = lines!(ax, df_out.t ./ (60*60*24), df_out.pm2_5, alpha=0.8)
+l1 = lines!(ax, df_out.t ./ (60*60*24), df_out.pm1_0, alpha=0.8)
+
+axislegend(ax, [l1, l2, l3], ["PM 1.0", "PM 2.5", "PM 10.0"])
+
+fig
+
+save("figures/sharedair/pm-timeseries.png", fig)
+save("figures/sharedair/pm-timeseries.pdf", fig)
+
+fig = Figure();
+ax = Axis(fig[1,1], xlabel="days since $(df_out.dateTime[1])", ylabel="Temperature [°C]");
+ax2 = Axis(fig[1,1], xlabel="days since $(df_out.dateTime[1])", ylabel="Relative Humidity [%]", yaxisposition=:right);
+
+l = lines!(ax, df_out.t ./ (60*60*24), df_out.temperature, alpha=0.8, linewidth=3, color=mints_colors[2])
+l2 = lines!(ax2, df_out.t ./ (60*60*24), df_out.humidity, alpha=0.8, linewidth=3, color=mints_colors[3])
+
+linkxaxes!(ax, ax2)
+
+axislegend(ax, [l, l2], ["Temperature", "Humidity"])
+
+fig
+xlims!(ax, 0, 10)
+fig
+
+save("figures/sharedair/temp-humidity.png", fig)
+save("figures/sharedair/temp-humidity.pdf", fig)
+
 
 
 # generate simple Lorenz system data to match that used in paper's example
@@ -145,7 +221,8 @@ function lorenz!(du, u, p, t)
 end
 
 prob = ODEProblem(lorenz!, u0, (tspan[1], tspan[end]), p)
-sol = solve(prob, saveat=tspan, abstol=1e-12, reltol=1e-12);
+sol = solve(prob, DP5(), saveat=tspan, abstol=1e-12, reltol=1e-12);
+# use DP5() to match original ode45 matlab use
 
 df_out = DataFrame()
 df_out.t = sol.t
@@ -158,4 +235,23 @@ if !ispath("data/lorenz")
 end
 CSV.write("data/lorenz/data.csv", df_out)
 
+fig = Figure();
+ga = fig[1,1] = GridLayout();
+ax1 = Axis(ga[1,1], ylabel="x", xticklabelsvisible=false, xticksvisible=false)
+ax2 = Axis(ga[2,1], ylabel="y", xticklabelsvisible=false, xticksvisible=false)
+ax3 = Axis(ga[3,1], xlabel="time", ylabel="z")
 
+linkxaxes!(ax1,ax2,ax3)
+
+lx = lines!(ax1, df_out.t, df_out.x, color=mints_colors[1])
+ly = lines!(ax2, df_out.t, df_out.y, color=mints_colors[2])
+lz = lines!(ax3, df_out.t, df_out.z, color=mints_colors[3])
+
+xlims!(ax3, df_out.t[1], df_out.t[end])
+
+rowgap!(ga, 5)
+
+fig
+
+save("figures/lorenz/time-series.png", fig)
+save("figures/lorenz/time-series.pdf", fig)

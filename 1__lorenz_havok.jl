@@ -1,24 +1,33 @@
 using CairoMakie
 using MintsMakieRecipes
 set_theme!(mints_theme)
+update_theme!(
+    figure_padding=30,
+    Axis=(
+        xticklabelsize=20,
+        yticklabelsize=20,
+        xlabelsize=22,
+        ylabelsize=22,
+        titlesize=25,
+    ),
+    Colorbar=(
+        ticklabelsize=20,
+        labelsize=22
+    )
+)
 
 using CSV, DataFrames
-using TimeSeriesTools
-using ParameterHandling
+# using TimeSeriesTools
+#using ParameterHandling
 using Dates, TimeZones
-using Unitful
-using Markdown, LaTeXStrings
+#using Unitful
+#using Markdown, LaTeXStrings
 using Statistics, StatsBase, Distributions, KernelDensity
 using BenchmarkTools
 using LinearAlgebra, StaticArrays
 using DifferentialEquations
 using DataInterpolations
 
-include("plot_defaults.jl")
-add_mints_theme()
-theme(:mints)
-
-include("plot_recipes.jl")
 include("utils.jl")
 
 if !ispath("figures/lorenz/havok")
@@ -27,14 +36,14 @@ end
 
 
 # 0. load data
-Data = Matrix(CSV.File("data/lorenz/data.csv") |> DataFrame)
+Data = Matrix(CSV.read("data/lorenz/data.csv", DataFrame))
 
+H = TimeDelayEmbedding(Data[:,2]; method=:backward)
 
-# 1. compute time delay embedding
-H = TimeDelayEmbedding(Data[:,2], method=:backward)
 
 # 2. compute singular value decomposition
 U, σ, V = svd(H)
+
 
 size(V)
 
@@ -43,47 +52,84 @@ dt = 0.001
 tspan = range(dt, step=dt, length=size(Data,1))
 Nmax = 50000  # max value for plotting
 
-p1 = scatter(
-    Data[1:Nmax,2], Data[1:Nmax,3], Data[1:Nmax,4],
-    ms=2,
-    msw=0,
-    msa=0,
-    marker_z = tspan[1:Nmax],
-    frame=:semi,
-    ticks=nothing,
-    xlabel="x",
-    ylabel="y",
-    zlabel="z",
-    label="",
-    cbar=false,
-    margins=0*Plots.mm,
-    background_color=:transparent,
-    title="attractor"
-)
+
+fig = Figure(; resolution=(1200,700), figure_padding=100);
+ax1 = Axis3(fig[1,1];
+            xlabel="x",
+            ylabel="y",
+            zlabel="z",
+            # aspect = :data,
+            azimuth=-35π/180,
+            elevation=30π/180,
+            xticksvisible=false,
+            yticksvisible=false,
+            zticksvisible=false,
+            xticklabelsvisible=false,
+            yticklabelsvisible=false,
+            zticklabelsvisible=false,
+            xlabeloffset=5,
+            ylabeloffset=5,
+            zlabeloffset=5,
+            title="Original Attractor"
+            );
+
+ax2 = Axis3(fig[1,2];
+            xlabel="v₁",
+            ylabel="v₂",
+            zlabel="v₃",
+            # aspect = :data,
+            azimuth=-35π/180,
+            elevation=37π/180,
+            xticksvisible=false,
+            yticksvisible=false,
+            zticksvisible=false,
+            xticklabelsvisible=false,
+            yticklabelsvisible=false,
+            zticklabelsvisible=false,
+            xlabeloffset=5,
+            ylabeloffset=5,
+            zlabeloffset=5,
+            title="Embedded Attractor"
+            );
+
+# hidedecorations!(ax1);
+# hidedecorations!(ax2);
+
+L = 1:Nmax
+l1 = lines!(ax1, Data[L,2], Data[L,3], Data[L,4], color=Data[L,1], colormap=:inferno, linewidth=3)
+
+l2 = lines!(ax2, V[L,1], V[L,2], V[L,3], color=tspan[L], colormap=:inferno, linewidth=3)
+
+fig
+
+save("figures/lorenz/havok/attractors1.png", fig)
+# save("figures/lorenz/havok/attractors1.pdf", fig)  # file is too big
 
 
-p2 = scatter(
-    V[1:Nmax,1], V[1:Nmax,2], V[1:Nmax,3],
-    ms=2,
-    msw=0,
-    msa=0,
-    marker_z = tspan[1:Nmax],
-    frame=:semi,
-    ticks=nothing,
-    xlabel="v₁",
-    ylabel="v₂",
-    zlabel="v₃",
-    label="",
-    cbar=false,
-    margins=0*Plots.mm,
-    background_color=:transparent,
-    title="embedded attractor"
-)
+fig = Figure();
+ax = Axis3(fig[1,1];
+            xlabel="v₁",
+            ylabel="v₂",
+            zlabel="v₃",
+            # aspect = :data,
+            azimuth=34π/180,
+            elevation=22π/180,
+            xticksvisible=false,
+            yticksvisible=false,
+            zticksvisible=false,
+            xticklabelsvisible=false,
+            yticklabelsvisible=false,
+            zticklabelsvisible=false,
+            xlabeloffset=5,
+            ylabeloffset=5,
+            zlabeloffset=5,
+            title="Embedded Attractor"
+            );
+L = 1:170000;
+l = lines!(ax, V[L,1], V[L,2], V[L,3]) #, color=tspan[L], colormap=:plasma)
 
-plot(p1, p2)
+fig
 
-savefig("figures/lorenz/havok/attractors1.png")
-savefig("figures/lorenz/havok/attractors1.pdf")
 
 
 # 5. set r value to 15 as in paper
@@ -139,12 +185,39 @@ A = Ξ[:, 1:r-n_control]   # State matrix A
 B = Ξ[:, r-n_control+1:end]      # Control matrix B
 
 # 10. visualize matrices
-p1 = heatmap(A, yflip=true, xlabel="A", ylabel="", showaxis=false,link=:y, cbar=false,clims=(minimum(A), maximum(A)), leftmargin=0*Plots.mm,rightmargin=0*Plots.mm)
-p2 = heatmap(B, yflip=true, xlabel="B", ylabel="", showaxis=false, link=:y, clims=(minimum(A),maximum(A)), color=:inferno,rightmargin=10*Plots.mm, leftmargin=0*Plots.mm)
-plot(p1, p2, layout = @layout([a{0.8w} b{0.2w} ]))
+fig = Figure();
+gl = fig[1,1:2] = GridLayout()
+ax1 = Axis(gl[1,1];
+           yreversed=true,
+           xlabel="A",
+           xticklabelsvisible=false,
+           yticklabelsvisible=false,
+           xticksvisible=false,
+           yticksvisible=false,
+           )
 
-savefig("figures/lorenz/havok/heatmap.png")
-savefig("figures/lorenz/havok/heatmap.pdf")
+ax2 = Axis(gl[1,2];
+           yreversed=true,
+           xlabel="B",
+           xticklabelsvisible=false,
+           yticklabelsvisible=false,
+           xticksvisible=false,
+           yticksvisible=false,
+           )
+
+h1 = heatmap!(ax1, A, colormap=:inferno)
+h2 = heatmap!(ax2, B', colormap=:inferno)
+
+colsize!(gl, 2, Relative(1/15)) # scale control column to correct size
+#cb = Colorbar(fig[1,3], limits = extrema(Ξ), colormap=:inferno)
+cb = Colorbar(fig[1,3], limits =(-60,60), colormap=:inferno)
+fig
+
+save("figures/lorenz/havok/heatmap.png", fig)
+save("figures/lorenz/havok/heatmap.pdf", fig)
+
+
+
 
 # 11. visualize eigenmodes
 p = plot([], yticks=[-0.3, 0.0, 0.3], legend=:outerright, label="")
