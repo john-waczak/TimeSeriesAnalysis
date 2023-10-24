@@ -40,7 +40,6 @@ Data = Matrix(CSV.read("data/lorenz/data.csv", DataFrame))
 
 H = TimeDelayEmbedding(Data[:,2]; method=:backward)
 
-
 # 2. compute singular value decomposition
 U, σ, V = svd(H)
 
@@ -258,7 +257,7 @@ u(t) = [itp(t) for itp ∈ itps]
 
 
 # 13. visualize first embedding coordinate that we want to fit:
-xs = u.(ts[L])
+xs = vcat(u.(ts[L])...)
 
 fig = Figure();
 gl = fig[1:2,1] = GridLayout();
@@ -267,7 +266,8 @@ ax2 = Axis(gl[2,1], ylabel="vᵣ²", xlabel="time");
 linkxaxes!(ax,ax2);
 
 l1 = lines!(ax, ts[1:Nmax], X[1:Nmax,1], linewidth=3)
-l2 = lines!(ax2, ts[1:Nmax], map(x->x[1]^2, xs[1:Nmax]), linewidth=3, color=mints_colors[2])
+#l2 = lines!(ax2, ts[1:Nmax], map(x->x[1]^2, xs[1:Nmax]), linewidth=3, color=mints_colors[2])
+l2 = lines!(ax2, ts[1:Nmax], xs[1:Nmax].^2, linewidth=3, color=mints_colors[2])
 
 rowsize!(gl, 2, Relative(0.2));
 xlims!(ax2, ts[1], ts[Nmax])
@@ -347,79 +347,28 @@ save("figures/lorenz/havok/attractor_reconstructed.png", fig)
 
 
 # 17. scatter plot and quantile quantile of fit
-using Metrics: r2_score
+include("viz.jl")
 
-
-fig = Figure();
-ga = fig[1, 1] = GridLayout()
-axtop = Axis(ga[1, 1];
-             leftspinevisible = false,
-             rightspinevisible = false,
-             bottomspinevisible = false,
-             topspinevisible = false,
-             )
-axmain = Axis(ga[2, 1], xlabel = "true v₁", ylabel = "predicted v₁")
-axright = Axis(ga[2, 2];
-               leftspinevisible = false,
-               rightspinevisible = false,
-               bottomspinevisible = false,
-               topspinevisible = false,
-               )
-
-linkyaxes!(axmain, axright)
-linkxaxes!(axmain, axtop)
-
-minval, maxval = extrema([extrema(X[:,1])..., extrema(Xtest[:,1])..., extrema(X̂[:,1])..., extrema(X̂test[:,1])...])
-δ_edge = 0.1*(maxval-minval)
-
-l1 = lines!(axmain, [minval-δ_edge, maxval+δ_edge], [minval-δ_edge, maxval+δ_edge], color=:gray, linewidth=3)
-s1 = scatter!(axmain, X[:,1], X̂[:,1], alpha=0.25)
-s2 = scatter!(axmain, Xtest[:,1], X̂test[:,1], marker=:cross, alpha=0.25)
-
-labels=[
-    "Training R²=$(round(r2_score(X[:,1], X̂[:,1]), digits=3)) (n=$(length(X[:,1])))",
-    "Testing   R²=$(round(r2_score(Xtest[:,1], X̂test[:,1]), digits=3)) (n=$(length(Xtest[:,1])))",
-    "1:1"
-]
-
-# leg = Legend(ga[1, 2], [s1, s2, l1], labels)
-leg = axislegend(axmain, [s1, s2, l1], labels; position=:lt)
-
-density!(axtop, X[:,1], color=mints_colors[1])
-density!(axtop, Xtest[:,1], color=(mints_colors[2], 0.66))
-
-density!(axright, X̂[:,1], direction = :y, color=mints_colors[1])
-density!(axright, X̂test[:,1], direction = :y, color=(mints_colors[2], 0.66))
-
-hidedecorations!(axtop)
-hidedecorations!(axright)
-#leg.tellheight = true
-rowsize!(ga, 1, Relative(0.1))
-colsize!(ga, 2, Relative(0.1))
-
-colgap!(ga, 0)
-rowgap!(ga, 0)
-
-xlims!(axmain, minval-δ_edge, maxval+δ_edge)
-ylims!(axmain, minval-δ_edge, maxval+δ_edge)
-
-fig
+fig = scatter_results(X[:,1],
+                      X̂[:,1],
+                      Xtest[:,1],
+                      X̂test[:,1],
+                      "v₁"
+                      )
 
 save("figures/lorenz/havok/scatterplot.png", fig)
 save("figures/lorenz/havok/scatterplot.pdf", fig)
 
-
-
-p1 = quantilequantile(
-    X[:,1], X̂[:,1],
-    Xtest[:,1], X̂test[:, 1],
-    xlabel="True v₁",
-    ylabel="Predicted v₁",
-    title="HAVOK Fit for v₁",
+fig = quantile_results(
+    X[:,1],
+    X̂[:,1],
+    Xtest[:,1],
+    X̂test[:,1],
+    "v₁"
 )
 
-savefig("figures/lorenz/havok/quantile-quantile.png")
-savefig("figures/lorenz/havok/quantile-quantile.pdf")
+save("figures/lorenz/havok/quantile-quantile.png", fig)
+save("figures/lorenz/havok/quantile-quantile.pdf", fig)
 
 
 
@@ -428,15 +377,19 @@ forcing_pdf = kde(X[:, r-n_control + 1])
 idxs_nozero = forcing_pdf.density .> 0
 gauss = fit(Normal, X[:, r-n_control+1])
 
-plot(gauss, label="gaussian fit", yaxis=:log, ls=:dash)
-plot!(forcing_pdf.x[idxs_nozero], forcing_pdf.density[idxs_nozero], label="pdf")
+fig = Figure();
+ax = Axis(fig[1,1], yscale=log10, xlabel="vᵣ", title="Forcing Statistics");
+
+l1 = lines!(ax, gauss, linestyle=:dash, linewidth=3)
+l2 = lines!(ax, forcing_pdf.x[idxs_nozero], forcing_pdf.density[idxs_nozero], linewidth=3)
 ylims!(1e-1, 1e3)
 xlims!(-0.01, 0.01)
-xlabel!("vᵣ")
-title!("Forcing Statistics")
+axislegend(ax, [l1, l2], ["Gaussian Fit", "Actual PDF"])
 
-savefig("figures/lorenz/havok/forcing-stats.png")
-savefig("figures/lorenz/havok/forcing-stats.pdf")
+fig
+
+save("figures/lorenz/havok/forcing-stats.png", fig)
+save("figures/lorenz/havok/forcing-stats.pdf", fig)
 
 
 # 19. Compute indices where forcing is active
@@ -486,141 +439,166 @@ forcing_dict = Dict(
 
 
 
-
 # 20. visualize the lobe switching behavior
-p1  = plot()
+fig = Figure();
+gl = fig[1:2,1] = GridLayout();
+ax = Axis(gl[1,1];
+          ylabel="v₁",
+          xticksvisible=false,
+          xticklabelsvisible=false
+          );
+ax2 = Axis(gl[2,1]; xlabel="time", ylabel="vᵣ");
+
+linkxaxes!(ax, ax2);
+
 # add plots for forcing times
 for idxs ∈ forcing_dict[:on]
-    plot!(
-        p1,
+    lines!(
+        ax,
         ts[idxs],
         X[idxs,1],
-        xlabel="",
-        ylabel="v₁",
-        label="",
-        color=mints_palette[2],
+        color=mints_colors[2],
+        linewidth=1,
     )
 end
 # add plots for linear times
 for idxs ∈ forcing_dict[:off]
-    plot!(
-        p1,
+    lines!(
+        ax,
         ts[idxs],
         X[idxs,1],
-        xlabel="",
-        ylabel="v₁",
-        label="",
-        color=mints_palette[1],
+        color=mints_colors[1],
+        linewidth=1
     )
 end
-
-# do the same for the forcing
-p2 = plot(
-    link=:x,
-    ygrid=false,
-    yminorgrid=false,
-    xgrid=true,
-    xminorgrid=true,
-    yticks=[0.0]
-)
 
 for idxs ∈ forcing_dict[:on]
-    plot!(
-        p2,
+    lines!(
+        ax2,
         ts[idxs],
-        map(x->x[1], xs[idxs]),
-        ylabel="v₁₅",
-        xlabel="time",
-        label="",
-        color=mints_palette[2],
-        lw=1
+        xs[idxs],
+        color=mints_colors[2],
+        linewidth=1
     )
 end
 # add plots for linear times
 for idxs ∈ forcing_dict[:off]
-    plot!(
-        p2,
+    lines!(
+        ax2,
         ts[idxs],
-        map(x->x[1], xs[idxs]),
-        ylabel="v₁₅",
-        xlabel="time",
-        label="",
-        color=mints_palette[1],
-        lw = 1
+        xs[idxs],
+        color=mints_colors[1],
+        linewidth = 1
     )
 end
 
-l = @layout [
-    a{0.8h}
-    b
-]
-plot(p1, p2, layout=l)
-xlims!(0, 40)
+rowsize!(gl, 2, Relative(0.2))
 
-savefig("figures/lorenz/havok/v1_forcing_identified.png")
-savefig("figures/lorenz/havok/v1_forcing_identified.pdf")
+fig
+
+save("figures/lorenz/havok/v1_forcing_identified.png", fig)
+save("figures/lorenz/havok/v1_forcing_identified.pdf", fig)
 
 
 
 # 21. Color-code attractor by forcing
-p1 = plot(
-    frame=:semi,
-    ticks=nothing,
+fig = Figure();
+ax = Axis3(
+    fig[1,1];
     xlabel="x",
     ylabel="y",
     zlabel="z",
-    cbar=false,
-    margins=0*Plots.mm,
-    background_color=:transparent,
+    azimuth=-35π/180,
+    elevation=30π/180,
+    xticksvisible=false,
+    yticksvisible=false,
+    zticksvisible=false,
+    xticklabelsvisible=false,
+    yticklabelsvisible=false,
+    zticklabelsvisible=false,
+    xlabeloffset=5,
+    ylabeloffset=5,
+    zlabeloffset=5,
     title="Attractor with Intermittent Forcing"
-
-)
+);
 
 for idxs ∈ forcing_dict[:on]
-    plot!(
-        p1,
+    lines!(
+        ax,
         X[idxs,1], X[idxs,2], X[idxs,3],
-        color=mints_palette[2],
-        label="",
+        color=mints_colors[2],
     )
 end
 # add plots for linear times
 for idxs ∈ forcing_dict[:off]
-    plot!(
-        p1,
+    lines!(
+        ax,
         X[idxs,1], X[idxs,2], X[idxs,3],
-        color=mints_palette[1],
-        label="",
+        color=mints_colors[1],
     )
 end
 
-display(p1)
+fig
 
-savefig("figures/lorenz/havok/attractor_w_forcing.png")
-savefig("figures/lorenz/havok/attractor_w_forcing.pdf")
+save("figures/lorenz/havok/attractor_w_forcing.png", fig)
+# savefig("figures/lorenz/havok/attractor_w_forcing.pdf")
 
 
 # 22. Plot time series predictions on test data
-p1 = plot(
+fig = Figure();
+ax = Axis(fig[1,1]; xlabel="time", ylabel="v₁", title="Predictions on Test Set")
+
+l1 = lines!(
+    ax,
     tspan[Ltest],
     Xtest[:,1],
-    xlabel="time",
-    ylabel="v₁",
-    label="embedding",
-    lw=2
+    linewidth=3
 )
 
-plot!(
+l2 = lines!(
+    ax,
     ts[Ltest],
     X̂test[:,1],
-    label="fit",
-    ls=:dot,
-    lw=2
+    linestyle=:dot,
+    linewidth=3
 )
 
-title!("Predictions for Test Data")
+leg = Legend(fig[1,2], [l1, l2], ["embedding", "prediction"])
 
-savefig("figures/lorenz/havok/timeseries_test_points.png")
-savefig("figures/lorenz/havok/timeseries_test_points.pdf")
+fig
 
+
+save("figures/lorenz/havok/timeseries_test_points.png", fig)
+save("figures/lorenz/havok/timeseries_test_points.pdf", fig)
+
+
+
+# reconstruct original time-series
+
+Ur*diagm(σr)*X'
+
+size(Ur)
+size(σr)
+size(Vr)
+
+all(isapprox.(Ur*diagm(σr)*Vr', H; rtol=0.0000001))
+
+res1 = Ur*diagm(σr)*hcat(X̂, xs)'
+
+
+
+fig = Figure();
+ax = Axis(fig[1,1], xlabel="time", ylabel="x(t)", title="HAVOK Model for x(t)");
+
+l1 = lines!(ax, Data[3:3+size(res1,2)-1,1], Data[3:3+size(res1,2)-1,2])
+l2 = lines!(ax, Data[3:3+size(res1,2)-1,1], res1[1,:], linestyle=:dash)
+
+xlims!(ax, 0, 50)
+
+leg = Legend(fig[1,2], [l1, l2], ["Original", "HAVOK"])
+
+fig
+
+save("figures/lorenz/havok/havok_pred_x.png", fig)
+save("figures/lorenz/havok/havok_pred_x.pdf", fig)
 
