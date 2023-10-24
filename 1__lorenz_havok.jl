@@ -220,76 +220,72 @@ save("figures/lorenz/havok/heatmap.pdf", fig)
 
 
 # 11. visualize eigenmodes
-p = plot([], yticks=[-0.3, 0.0, 0.3], legend=:outerright, label="")
+fig = Figure();
+ax = Axis(fig[1,1], title="Eigenmodes");
+
+
+ls1 = []
+ls2 = []
+lr = []
+# p = plot([], yticks=[-0.3, 0.0, 0.3], legend=:outerright, label="")
+
 for i ∈ 1:r
     if i ≤ 3
-        plot!(Ur[:,i], label=L"u_{%$i}", color=:blue)
+        l = lines!(ax, 1:100, Ur[:,i], color=mints_colors[1], linewidth=3)
+        push!(ls1, l)
     elseif i > 3 && i < r
-        plot!(Ur[:,i], label=L"u_{%$i}", color=:grey, alpha=0.5)
+        l = lines!(ax, 1:100, Ur[:,i], color=:grey, alpha=0.5, linewidth=3)
+        push!(ls2, l)
     else
-        plot!(Ur[:,i], label=L"u_{%$i}", color=:red)
+        l = lines!(ax, 1:100, Ur[:,i], color=mints_colors[2], linewidth=3)
+        push!(lr, l)
     end
 end
 
-display(p)
+axislegend(ax, [ls1..., ls2[1], lr[1]], ["u₁", "u₂", "u₃", "⋅⋅⋅", "uᵣ"])
 
-savefig("figures/lorenz/havok/eigenmodes.png")
-savefig("figures/lorenz/havok/eigenmodes.pdf")
+fig
+
+save("figures/lorenz/havok/eigenmodes.png", fig)
+save("figures/lorenz/havok/eigenmodes.pdf", fig)
 
 
 # 12. define interpolation function for forcing coordinate
 # fit these on the full Vr matrix so we get all the times for predictions on test points
-
+# stat at 3 due to derivative
 itps = [DataInterpolations.LinearInterpolation(Vr[3:end-3,j], ts) for j ∈ r-n_control+1:r]
 u(t) = [itp(t) for itp ∈ itps]
+
 
 # 13. visualize first embedding coordinate that we want to fit:
 xs = u.(ts[L])
 
-p1 = plot(
-    ts[1:Nmax],
-    X[1:Nmax,1],
-    xlabel="",
-    ylabel="v₁",
-    label=""
-)
+fig = Figure();
+gl = fig[1:2,1] = GridLayout();
+ax = Axis(gl[1,1], ylabel="v₁", xticksvisible=false, xticklabelsvisible=false);
+ax2 = Axis(gl[2,1], ylabel="vᵣ²", xlabel="time");
+linkxaxes!(ax,ax2);
 
-p2 = plot(
-    ts[1:Nmax],
-    map(x->x[1]^2, xs[1:Nmax]),
-    ylabel="vᵣ²",
-    xlabel="time",
-    label="",
-    color=:red,
-    link=:x,
-#    grid=false,
-#    minorgrid=false,
-    ygrid=false,
-    yminorgrid=false,
-    xgrid=true,
-    xminorgrid=true,
-    yticks=[0.0],
-    lw=1,
-)
+l1 = lines!(ax, ts[1:Nmax], X[1:Nmax,1], linewidth=3)
+l2 = lines!(ax2, ts[1:Nmax], map(x->x[1]^2, xs[1:Nmax]), linewidth=3, color=mints_colors[2])
 
-l = @layout [
-    a{0.8h}
-    b
-]
-plot(p1, p2, layout=l)
+rowsize!(gl, 2, Relative(0.2));
+xlims!(ax2, ts[1], ts[Nmax])
+fig
 
-savefig("figures/lorenz/havok/v1_with_forcing.png")
-savefig("figures/lorenz/havok/v1_with_forcing.pdf")
+save("figures/lorenz/havok/v1_with_forcing.png", fig)
+save("figures/lorenz/havok/v1_with_forcing.pdf", fig)
 
 
-# 14. Generate our A and B matrices as static arrays
+# 14. Generate our A and B matrices as static (stack) arrays
 sA = @SMatrix[A[i,j] for i ∈ axes(A,1), j ∈ axes(A,2)]
 sB = @SMatrix[B[i,j] for i ∈ axes(B,1), j ∈ axes(B,2)]
 
 # define function and integrate to get model predictions
+
 function f!(dx, x, p, t)
     A,B = p
-    dx .= A*x + B*u(t)
+    dx .= A*x + B*u(t)  # we can speed this up 
 end
 
 params = (sA, sB)
@@ -302,68 +298,117 @@ dx = copy(x₀)
 prob = ODEProblem(f!, x₀, (ts[1], ts[end]), params)
 sol = solve(prob, saveat=ts);
 
+
 size(sol)
 X̂ = sol[:,L]'
 X̂test = sol[:,Ltest]'
 
 # 15. visualize results
-p1 = plot(
-    tspan[L],
-    X[:,1],
-    xlabel="time",
-    ylabel="v₁",
-    label="embedding",
-    lw=2
-)
+fig = Figure();
+ax = Axis(fig[1,1], xlabel="time", ylabel="v₁", title="HAVOK Fit for v₁")
 
-plot!(
-    ts[L],
-    X̂[:,1],
-    label="fit",
-    ls=:dot,
-    lw=2
-)
+l1 = lines!(ax, tspan[L], X[:,1], linewidth=2)
+l2 = lines!(ax, ts[L], X̂[:,1], linewidth=2, linestyle=:dot)
 
-xlims!(0, 50)
-savefig("figures/lorenz/havok/timeseries_reconstructed.png")
-savefig("figures/lorenz/havok/timeseries_reconstructed.pdf")
+axislegend(ax, [l1, l2], ["Embedding", "Fit"])
+xlims!(ax, 0, 50)
+
+fig
+
+save("figures/lorenz/havok/timeseries_reconstructed.png", fig)
+save("figures/lorenz/havok/timeseries_reconstructed.pdf", fig)
 
 
 
 # 16. visualize the fitted attractor:
-p1 = scatter(
-    X̂[:,1], X̂[:,2], X̂[:,3],
-    ms=2,
-    msw=0,
-    msa=0,
-    marker_z = ts[L],
-    frame=:none,
-    ticks=nothing,
-    xlabel="",
-    ylabel="",
-    zlabel="",
-    label="",
-    cbar=false,
-    margins=0*Plots.mm,
-    background_color=:transparent
-)
+fig = Figure();
+ax = Axis3(fig[1,1];
+           xlabel="v₁",
+           ylabel="v₂",
+           zlabel="v₃",
+           azimuth=-35π/180,
+           elevation=30π/180,
+           xticksvisible=false,
+           yticksvisible=false,
+           zticksvisible=false,
+           xticklabelsvisible=false,
+           yticklabelsvisible=false,
+           zticklabelsvisible=false,
+           xlabeloffset=5,
+           ylabeloffset=5,
+           zlabeloffset=5,
+           title="Reconstructed Attractor"
+           );
+l1 = lines!(ax, X̂[:,1], X̂[:,2], X̂[:,3], linewidth=3, color=ts[L], colormap=:plasma)
+fig
 
-savefig("figures/lorenz/havok/attractor_reconstructed.png")
-savefig("figures/lorenz/havok/attractor_reconstructed.pdf")
+save("figures/lorenz/havok/attractor_reconstructed.png", fig)
+# save("figures/lorenz/havok/attractor_reconstructed.pdf", fig) # too big
 
 
 # 17. scatter plot and quantile quantile of fit
+using Metrics: r2_score
 
-p1 = scatterresult(
-    X[:,1], X̂[:,1],
-    Xtest[:,1], X̂test[:, 1],
-    xlabel="True v₁",
-    ylabel="Predicted v₁",
-    plot_title="HAVOK Fit for v₁",
-)
 
-savefig("figures/lorenz/havok/scatterplot.png")
-savefig("figures/lorenz/havok/scatterplot.pdf")
+fig = Figure();
+ga = fig[1, 1] = GridLayout()
+axtop = Axis(ga[1, 1];
+             leftspinevisible = false,
+             rightspinevisible = false,
+             bottomspinevisible = false,
+             topspinevisible = false,
+             )
+axmain = Axis(ga[2, 1], xlabel = "true v₁", ylabel = "predicted v₁")
+axright = Axis(ga[2, 2];
+               leftspinevisible = false,
+               rightspinevisible = false,
+               bottomspinevisible = false,
+               topspinevisible = false,
+               )
+
+linkyaxes!(axmain, axright)
+linkxaxes!(axmain, axtop)
+
+minval, maxval = extrema([extrema(X[:,1])..., extrema(Xtest[:,1])..., extrema(X̂[:,1])..., extrema(X̂test[:,1])...])
+δ_edge = 0.1*(maxval-minval)
+
+l1 = lines!(axmain, [minval-δ_edge, maxval+δ_edge], [minval-δ_edge, maxval+δ_edge], color=:gray, linewidth=3)
+s1 = scatter!(axmain, X[:,1], X̂[:,1], alpha=0.25)
+s2 = scatter!(axmain, Xtest[:,1], X̂test[:,1], marker=:cross, alpha=0.25)
+
+labels=[
+    "Training R²=$(round(r2_score(X[:,1], X̂[:,1]), digits=3)) (n=$(length(X[:,1])))",
+    "Testing   R²=$(round(r2_score(Xtest[:,1], X̂test[:,1]), digits=3)) (n=$(length(Xtest[:,1])))",
+    "1:1"
+]
+
+# leg = Legend(ga[1, 2], [s1, s2, l1], labels)
+leg = axislegend(axmain, [s1, s2, l1], labels; position=:lt)
+
+density!(axtop, X[:,1], color=mints_colors[1])
+density!(axtop, Xtest[:,1], color=(mints_colors[2], 0.66))
+
+density!(axright, X̂[:,1], direction = :y, color=mints_colors[1])
+density!(axright, X̂test[:,1], direction = :y, color=(mints_colors[2], 0.66))
+
+hidedecorations!(axtop)
+hidedecorations!(axright)
+#leg.tellheight = true
+rowsize!(ga, 1, Relative(0.1))
+colsize!(ga, 2, Relative(0.1))
+
+colgap!(ga, 0)
+rowgap!(ga, 0)
+
+xlims!(axmain, minval-δ_edge, maxval+δ_edge)
+ylims!(axmain, minval-δ_edge, maxval+δ_edge)
+
+fig
+
+save("figures/lorenz/havok/scatterplot.png", fig)
+save("figures/lorenz/havok/scatterplot.pdf", fig)
+
+
 
 p1 = quantilequantile(
     X[:,1], X̂[:,1],
