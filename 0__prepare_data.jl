@@ -1,5 +1,4 @@
-using Pkg
-
+# using Pkg
 # make sure we update our copy of the repos:
 # Pkg.add(url="https://github.com/john-waczak/TimeSeriesTools.jl.git")
 # using TimeSeriesTools

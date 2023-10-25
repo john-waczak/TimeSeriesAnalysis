@@ -1,5 +1,6 @@
 using CairoMakie
 using MintsMakieRecipes
+
 set_theme!(mints_theme)
 update_theme!(
     figure_padding=30,
@@ -573,7 +574,7 @@ save("figures/lorenz/havok/timeseries_test_points.pdf", fig)
 
 
 
-# reconstruct original time-series
+# 23. reconstruct original time-series
 
 Ur*diagm(σr)*X'
 
@@ -583,17 +584,20 @@ size(Vr)
 
 all(isapprox.(Ur*diagm(σr)*Vr', H; rtol=0.0000001))
 
-res1 = Ur*diagm(σr)*hcat(X̂, xs)'
+# reform predicted Hankel matrix
+Ĥ = Ur*diagm(σr)*hcat(X̂, xs)'
 
+
+println(size(Ĥ))
 
 
 fig = Figure();
 ax = Axis(fig[1,1], xlabel="time", ylabel="x(t)", title="HAVOK Model for x(t)");
 
-l1 = lines!(ax, Data[3:3+size(res1,2)-1,1], Data[3:3+size(res1,2)-1,2])
-l2 = lines!(ax, Data[3:3+size(res1,2)-1,1], res1[1,:], linestyle=:dash)
+l1 = lines!(ax, Data[3:3+size(Ĥ,2)-1,1], Data[3:3+size(Ĥ,2)-1,2])
+l2 = lines!(ax, Data[3:3+size(Ĥ,2)-1,1], Ĥ[end,:], linestyle=:dash)
 
-xlims!(ax, 0, 50)
+xlims!(ax, 0, 10)
 
 leg = Legend(fig[1,2], [l1, l2], ["Original", "HAVOK"])
 

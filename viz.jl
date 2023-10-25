@@ -36,8 +36,8 @@ function scatter_results(
     s2 = scatter!(axmain, ytest, ŷtest, marker=:cross, alpha=0.25)
 
     labels=[
-        "Training R²=$(round(r2_score(y, ŷ), digits=3)) (n=$(length(X[:,1])))",
-        "Testing   R²=$(round(r2_score(ytest, ŷtest), digits=3)) (n=$(length(Xtest[:,1])))",
+        "Training R²=$(round(r2_score(y, ŷ), digits=3)) (n=$(length(y)))",
+        "Testing   R²=$(round(r2_score(ytest, ŷtest), digits=3)) (n=$(length(ytest)))",
         "1:1"
     ]
 
@@ -86,7 +86,7 @@ function quantile_results(
     qtrain = qqplot!(ax, y, ŷ, alpha=0.5)
     qtest = qqplot!(ax, ytest, ŷtest, marker=:rect, alpha=0.5)
 
-    leg = axislegend(ax, [qtrain, qtest, l1], ["Training", "Testing"]; position=:lt)
+    leg = axislegend(ax, [qtrain, qtest, l1], ["Training", "Testing", "1:1"]; position=:lt)
 
     return fig
 end
