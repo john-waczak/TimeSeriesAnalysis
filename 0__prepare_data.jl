@@ -97,7 +97,7 @@ GC.gc()
 
 # chop IPS7100 to those values. Ignore particle counts
 names_to_drop = [n for n ∈ names(df_ips7100) if occursin("pc", n)]
-df_ips7100 = df_ips7100[idx₀:idx_end, Not(names_to_drop)]
+df_ips7100 = df_ips7100[:, Not(names_to_drop)]
 df_bme680 = df_bme680[:, Not(["gas"])]
 
 # add new column which is time rounded to nearest seconds since start of IPS7100 data
