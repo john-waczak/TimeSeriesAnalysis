@@ -28,6 +28,12 @@ using BenchmarkTools
 using LinearAlgebra, StaticArrays
 using DifferentialEquations
 using DataInterpolations
+using StableRNGs
+
+
+# set random seed for reproduciblity
+rng = StableRNG(42)
+
 
 include("utils.jl")
 

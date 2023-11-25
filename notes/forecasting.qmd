@@ -1,0 +1,8 @@
+---
+title: "Time Series Forecasting"
+subtitle: "Based on book by Hyndman and Athanasopoulos"
+author: "John Waczak"
+format: 
+    html:
+        html-math-method: katex
+---

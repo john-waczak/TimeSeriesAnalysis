@@ -19,12 +19,16 @@ update_theme!(
 )
 
 using CSV, DataFrames
-using Dates, TimeZones
 using Statistics, StatsBase, Distributions, KernelDensity
 using BenchmarkTools
 using LinearAlgebra, StaticArrays
 using DifferentialEquations
 using DataInterpolations
+using StableRNGs
+
+
+# set random seed for reproduciblity
+rng = StableRNG(42)
 
 
 include("utils.jl")
@@ -302,6 +306,14 @@ fig
 save("figures/sharedair/havok/v1_with_forcing.png", fig)
 save("figures/sharedair/havok/v1_with_forcing.pdf", fig)
 
+
+fig = Figure();
+ax = Axis(fig[1,1], xlabel="time (hours)", ylabel="vᵣ(t)", title="Forcing Function");
+lines!(ax, ts[1:1000] ./ (60^2), xs[1:1000, 1], linewidth=3)
+fig
+
+save("figures/sharedair/havok/forcing-time-series.png", fig)
+save("figures/sharedair/havok/forcing-time-series.png", pdf)
 
 
 # 14. Integrate model forward in time

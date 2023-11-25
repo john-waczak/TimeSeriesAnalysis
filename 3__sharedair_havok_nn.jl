@@ -1,17 +1,38 @@
+using CairoMakie
+# using GLMakie
+using MintsMakieRecipes
+
+set_theme!(mints_theme)
+update_theme!(
+    figure_padding=30,
+    Axis=(
+        xticklabelsize=20,
+        yticklabelsize=20,
+        xlabelsize=22,
+        ylabelsize=22,
+        titlesize=25,
+    ),
+    Colorbar=(
+        ticklabelsize=20,
+        labelsize=22
+    )
+)
+
+
 using CSV, DataFrames
-using Plots, StatsPlots
-using TimeSeriesTools
 using Statistics, StatsBase, Distributions, KernelDensity
-using LinearAlgebra
+using LinearAlgebra, StaticArrays
+using DifferentialEquations
 using DataInterpolations
-using StaticArrays
 
 # see: https://docs.sciml.ai/Overview/stable/showcase/missing_physics/#Definition-of-the-Universal-Differential-Equation
-using DifferentialEquations, SciMLSensitivity, DiffEqFlux
-using Zygote
+# do we want zygote or forward diff?
+using Zygote, ForwardDiff
+using SciMLSensitivity, DiffEqFlux
 using Optimization, OptimizationOptimisers, OptimizationOptimJL
 using ModelingToolkit, DataDrivenDiffEq, DataDrivenSparse
 using Lux, ComponentArrays
+
 using StableRNGs
 
 
@@ -19,16 +40,18 @@ using StableRNGs
 rng = StableRNG(42)
 
 
-include("plot_defaults.jl")
-add_mints_theme()
-theme(:mints)
 
-include("plot_recipes.jl")
-include("utils.jl")
 
-if !ispath("figures/sharedair/havok")
-    mkpath("figures/sharedair/havok")
-end
+
+
+
+
+
+
+
+
+
+
 
 
 # 0. Load in data and set window size (for ncol argument)
