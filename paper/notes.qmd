@@ -1,0 +1,72 @@
+---
+title: "HAVOK + UDE for PM Time Series Analysis and Forecasting"
+author: "John Waczak"
+format:
+    html:
+      self-contained: true
+      grid: 
+        margin-width: 350px
+    pdf: default
+reference-location: margin
+citation-location: margin
+bibliography: references.bib
+---
+
+
+
+# Notes
+
+- Brunton et al [@brunton2017chaos] introduce the HAVOK model which can be used to model chaotic time series as a combination of a simple linear model with external forcing. They motivate this model using Koopman operator theory as applied to a Hankel matrix formed by constructing time-delay embeddings of the original time series data.
+  - suppose we have a time series $x(t)$
+  - Construct Hanekl matrix $H\in\mathbb{R}^{q\times p}$
+  - Decompose to obtain $H = U\Sigma V'$
+  - The columns of $U$ and $V$ are *eigen* time series
+  - They are ordered by the ability for each column to express the variance in the columns and rows of $H$
+  - Dynamic mode decomposition constructs a linear model on the delay embeddings $\mathbf{x}_{k+1} = A\mathbf{x}_{k}$
+  - "trajectories evolve to densely fill an attractor, so **more data provides more information**."
+  - The first $r$ columns of $V$ provide a time series of the magnitude of each of the columns of $U\Sigma$.
+  - We can obtain the rank $r$ by a variety of methods i.e. the elbow of the plot of ranked singular values or by *optimal hard threshold*
+  - HAVOK model takes the form $\dot{\mathbf{v}}(t) = A\mathbf{v}(t) + Bv_r(t)$ where we take the first $r-1$ columns of $V$ as the coordinates and treat the $r$ as forcing.
+- "Koopman observable subspaces and finite linear representations of nonlinear dynamical systems for control"
+- Khodkar et al [@khodkar2019koopman]
+- "Linear predictors for nonlinear dynamical systems: Koopman operator meets model predictive control" Korda and Mezic
+- "Nonlinear laplacian spectral analysis for time series with intermittency and low-frequency variability"
+- "Statistically optimal almost-invariant sets" [@froyland2005statistically]
+
+# Outline
+
+## Introduction
+
+- Particulate Matter and Importance
+- Previous Methods for Predicting PM Time Series
+- Statistical and Machine Learning approaches (RNN, LSTM, etc...)
+- HAVOK
+- Physics Informed + UDES
+- Idea: physically motivated model. The problem of forecasting is reduced to forecasting the forcing function which, in general, is significantly simpler than forecasting the original time series-- can we make a sufficient forcing model to provide a 10-30 minute forecast without the need for a large RNN or other complicated model?
+- Summary
+
+## Materials and Methods
+
+- Model Description (HAVOK + UDE)
+- Description of PM Datasets used (i.e. the fort-worth data), time series from a single sensor for different times for a whole year...
+
+## Results
+
+- Average to 10 minutes to make interpretation easier...
+- We should compare models for 10 minute averaging, 1 hour averaging, and 24 hour averaging.
+- Does the need for external forcing disappear as we decrease the temporal resolution?
+- Model PM 1, PM 2.5, and PM 10
+- General exploratory data analysis e.g. data statistics, and perhaps a spectral analysis using FFT
+  - Use periodic behavior (i.e. the 12/24 hour diurnal cycle) to justify a "mostly" linear model
+  - See, for example: "Dirunal patterns in global fine particulate matter concentration" [@manning2018diurnal]
+- Evaluate how "chaotic" the PM time series are (Lyapunov exponents?). This may not be necessary since we are physically justified in saying there is aperiodic external forcing
+- Evaluate if the bursting phenomenon in forcing function occurs *before* the spike in particulate matter
+- Illustrate Embedding dynamics in 3d
+- Illustrate Forcing Statistics (i.e. plot norm squared). Apply forcing function to longer time series (do we have a year) and create polar plots for single week statistics and for 12-months
+- Illustrate model
+
+## Discussion
+
+- Limitations: for the data driven identification of the time delay coordinates (after SVD) to be successful, we must use time series with sufficient variation in measurements (i.e. some normal behavior and some spikes). We suggest a week's worth of data will be sufficient.
+
+## Conclusions
