@@ -1,9 +1,13 @@
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+CondaPkg = "992eb4ea-22a4-4c89-a5bb-47a3300528ab"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
+JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
 MintsMakieRecipes = "6ebddb0b-cb6d-4cb8-921a-b084ea45d677"
+ProgressMeter = "92933f4c-e287-5a05-a399-4b506db050ca"
+PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
 TimeZones = "f269a46b-ccf7-5d73-abea-4c690281aa53"
