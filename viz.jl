@@ -1,3 +1,23 @@
+set_theme!(mints_theme)
+update_theme!(
+    figure_padding=30,
+    Axis=(
+        xticklabelsize=20,
+        yticklabelsize=20,
+        xlabelsize=22,
+        ylabelsize=22,
+        titlesize=25,
+    ),
+    Colorbar=(
+        ticklabelsize=20,
+        labelsize=22
+    )
+)
+
+
+
+
+
 import StatisticalMeasures: RSquared
 
 rsq(ŷ, y) = RSquared()(ŷ, y)

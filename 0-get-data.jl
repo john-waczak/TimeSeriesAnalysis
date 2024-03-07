@@ -108,17 +108,39 @@ for (node, df) in pairs(dfs)
         mkpath(csv_path)
     end
 
-    node = "Central Hub 7"
-    df = dfs[node]
-
     cols_to_keep = [:pm0_1, :pm0_3, :pm0_5, :pm1_0, :pm2_5, :pm5_0, :pm10_0]
     dropmissing!(df)
 
+    df.min = round.(df.datetime, Dates.Minute(1));
     df.five_min = round.(df.datetime, Dates.Minute(5));
     df.quarter_hour = round.(df.datetime, Dates.Minute(15));
     df.hour = round.(df.datetime, Dates.Hour);
     df.eight_hour = round.(df.datetime, Dates.Hour(8));
     df.day = round.(df.datetime, Dates.Day);
+
+
+    # 1 minute data
+    gdf = groupby(df, :min)
+    df_sub = combine(gdf, cols_to_keep .=> mean; renamecols = false)
+    rename!(df_sub, :min => :datetime)
+    df_sub.dt = [Minute(q .- df_sub.datetime[1]).value for q in df_sub.datetime]
+    df_sub.t_skip = vcat(0, Minute.(df_sub.datetime[2:end] .- df_sub.datetime[1:end-1]) .!= Minute(1))
+
+    idx_group = Int[]
+    i = 1
+    for j ∈ 1:nrow(df_sub)
+        if df_sub.t_skip[j] == 1
+            i += 1
+        end
+        push!(idx_group, i)
+    end
+    df_sub.group = idx_group
+    df_sub_summary = combine(groupby(df_sub, :group), nrow)
+
+
+    CSV.write(joinpath(csv_path, "df-1-min.csv"), df_sub)
+    CSV.write(joinpath(csv_path, "df-1-min_summary.csv"), df_sub_summary)
+
 
 
     # 5 minute data

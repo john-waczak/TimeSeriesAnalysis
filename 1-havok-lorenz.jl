@@ -1,30 +1,13 @@
 using CairoMakie
 using MintsMakieRecipes
-
-set_theme!(mints_theme)
-update_theme!(
-    figure_padding=30,
-    Axis=(
-        xticklabelsize=20,
-        yticklabelsize=20,
-        xlabelsize=22,
-        ylabelsize=22,
-        titlesize=25,
-    ),
-    Colorbar=(
-        ticklabelsize=20,
-        labelsize=22
-    )
-)
-
-include("utils.jl")
-include("viz.jl")
-
 using CSV, DataFrames
 using LinearAlgebra
 using DataInterpolations
 using DifferentialEquations
 using Statistics, StatsBase, Distributions, KernelDensity
+
+include("utils.jl")
+include("viz.jl")
 
 
 # create sample "time-series" to see the embedding
@@ -58,17 +41,10 @@ if !ispath(figpath_lorenz)
     mkpath(figpath_lorenz)
 end
 
-datapaths_cn = [
-    joinpath(datapath, "central-nodes", "central-hub-4"),
-    joinpath(datapath, "central-nodes", "central-hub-7"),
-    joinpath(datapath, "central-nodes", "central-hub-10"),
-]
 
-@assert all(ispath.(datapaths_cn))
-
-# ------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------
 # Standard HAVOK for Lorenz System
-# ------------------------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------------------
 
 # 0. load data
 df = CSV.read(datapath_lorenz, DataFrame)
