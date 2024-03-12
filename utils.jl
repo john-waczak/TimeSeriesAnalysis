@@ -16,3 +16,23 @@ function TimeDelayEmbedding(z; nrow=100, method=:forward)
     return H
 end
 
+
+
+function parse_datetime(dt)
+    dt_out = String(dt)
+
+    if occursin(".", dt)
+        try
+            return ZonedDateTime(dt, "yyyy-mm-dd HH:MM:SS.sssssszzzz")
+        catch e
+            return missing
+        end
+    else
+        try
+            return ZonedDateTime(dt, "yyyy-mm-dd HH:MM:SSzzzz")
+        catch e
+            return missing
+        end
+    end
+end
+

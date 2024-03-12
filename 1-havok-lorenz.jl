@@ -1,11 +1,11 @@
 using CairoMakie
-using MintsMakieRecipes
 using CSV, DataFrames
 using LinearAlgebra
 using DataInterpolations
 using DifferentialEquations
 using Statistics, StatsBase, Distributions, KernelDensity
 
+include("./makie-defaults.jl")
 include("utils.jl")
 include("viz.jl")
 
@@ -63,6 +63,7 @@ ly = lines!(ax2, df.t, df.y, color=mints_colors[2])
 lz = lines!(ax3, df.t, df.z, color=mints_colors[3])
 
 xlims!(ax3, df.t[1], df.t[end])
+
 
 rowgap!(ga, 5)
 
