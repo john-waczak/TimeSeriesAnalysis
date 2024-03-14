@@ -99,13 +99,15 @@ function process_df(df_path)
     # 4. round to nearest second
     df.datetime = round.(df.datetime, Second(1))
 
-    # 5. average to 1 minute
-    df.min = round.(df.datetime, Minute(1))
-    gdf = groupby(df, :min)
-    df = combine(gdf, cols_to_keep .=> mean; renamecols = false)
-    rename!(df, :min=> :datetime);
+    # # 5. average to 1 minute
+    # df.min = round.(df.datetime, Minute(1))
+    # gdf = groupby(df, :min)
+    # df = combine(gdf, cols_to_keep .=> mean; renamecols = false)
+    # rename!(df, :min=> :datetime);
     return df
 end
+
+
 
 for node ∈ nodes
     println("Working on $(node)")
@@ -132,20 +134,19 @@ for node ∈ nodes
 
     println("gouping by Δt jump...")
 
-    dfs.dt = [Minute(q .- dfs.datetime[1]).value for q in dfs.datetime]
-    dfs.t_skip = vcat(0, Minute.(dfs.datetime[2:end] .- dfs.datetime[1:end-1]) .!= Minute(1))
+    df.dt = [Second(q .- df.datetime[1]).value for q in df.datetime]
+    df.t_skip = vcat(0, Second.(df.datetime[2:end] .- df.datetime[1:end-1]) .!= Second(1))
 
     idx_group = Int[]
     i = 1
-    for j ∈ 1:nrow(dfs)
-        if dfs.t_skip[j] == 1
+    for j ∈ 1:nrow(df)
+        if df.t_skip[j] == 1
             i += 1
         end
         push!(idx_group, i)
     end
-    dfs.group = idx_group
-    dfs_summary = combine(groupby(dfs, :group), nrow)
-
+    df.group = idx_group
+    df_summary = combine(groupby(df, :group), nrow)
 
     save_path = "./data/processed/central-nodes/"
     if !ispath(save_path)
@@ -153,12 +154,92 @@ for node ∈ nodes
     end
 
     csv_path = joinpath(save_path, replace(lowercase(node), " " => "-"))
-    CSV.write(joinpath(csv_path, "df.csv"), dfs)
-    CSV.write(joinpath(csv_path, "df-summary.csv"), dfs_summary)
+    CSV.write(joinpath(csv_path, "df-1-sec.csv"), df)
+    CSV.write(joinpath(csv_path, "df-1-sec_summary.csv"), df_summary)
+
+
+    # do the same but for 1 minute average
+    dfs.minute = round.(dfs.datetime, Minute(1))
+    gdf = groupby(dfs, :minute)
+    df = combine(gdf, cols_to_keep .=> mean; renamecols = false)
+    rename!(df, :minute => :datetime)
+
+    println("gouping by Δt jump...")
+
+    df.dt = [Minute(q .- df.datetime[1]).value for q in df.datetime]
+    df.t_skip = vcat(0, Minute.(df.datetime[2:end] .- df.datetime[1:end-1]) .!= Minute(1))
+
+    idx_group = Int[]
+    i = 1
+    for j ∈ 1:nrow(df)
+        if df.t_skip[j] == 1
+            i += 1
+        end
+        push!(idx_group, i)
+    end
+    df.group = idx_group
+    df_summary = combine(groupby(df, :group), nrow)
+
+    save_path = "./data/processed/central-nodes/"
+    if !ispath(save_path)
+        mkpath(save_path)
+    end
+
+    csv_path = joinpath(save_path, replace(lowercase(node), " " => "-"))
+    CSV.write(joinpath(csv_path, "df-1-min.csv"), df)
+    CSV.write(joinpath(csv_path, "df-1-min_summary.csv"), df_summary)
 
 
 
-    # do the same but for a 15-min average and a 1-hour average
+    # do the same but for a 15-min average
+    dfs.quarter_hour = round.(dfs.datetime, Minute(15))
+    gdf = groupby(dfs, :quarter_hour)
+    df = combine(gdf, cols_to_keep .=> mean; renamecols = false)
+    rename!(df, :quarter_hour => :datetime)
+
+    println("gouping by Δt jump...")
+
+    df.dt = [Minute(q .- df.datetime[1]).value for q in df.datetime]
+    df.t_skip = vcat(0, Minute.(df.datetime[2:end] .- df.datetime[1:end-1]) .!= Minute(15))
+
+    idx_group = Int[]
+    i = 1
+    for j ∈ 1:nrow(df)
+        if df.t_skip[j] == 1
+            i += 1
+        end
+        push!(idx_group, i)
+    end
+    df.group = idx_group
+    df_summary = combine(groupby(df, :group), nrow)
+
+    CSV.write(joinpath(csv_path, "df-15-min.csv"), df)
+    CSV.write(joinpath(csv_path, "df-15-min_summary.csv"), df_summary)
+
+    # do the same but for a 1-hour average
+    dfs.hour = round.(dfs.datetime, Hour(1))
+    gdf = groupby(dfs, :hour)
+    df = combine(gdf, cols_to_keep .=> mean; renamecols = false)
+    rename!(df, :hour => :datetime)
+
+    println("gouping by Δt jump...")
+
+    df.dt = [Minute(q .- df.datetime[1]).value for q in df.datetime]
+    df.t_skip = vcat(0, Minute.(df.datetime[2:end] .- df.datetime[1:end-1]) .!= Minute(60))
+
+    idx_group = Int[]
+    i = 1
+    for j ∈ 1:nrow(df)
+        if df.t_skip[j] == 1
+            i += 1
+        end
+        push!(idx_group, i)
+    end
+    df.group = idx_group
+    df_summary = combine(groupby(df, :group), nrow)
+
+    CSV.write(joinpath(csv_path, "df-1-hour.csv"), df)
+    CSV.write(joinpath(csv_path, "df-1-hour_summary.csv"), df_summary)
 end
 
 
