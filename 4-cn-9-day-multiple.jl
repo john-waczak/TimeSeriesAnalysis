@@ -369,5 +369,82 @@ save(joinpath(fig_savepath, "reconstructed-embedding-coords__zoomed.png"), fig)
 
 
 
+# Plot statistics of forcing function
+fig = Figure();
+ax = Axis(fig[1,1], yscale=log10, xlabel="vᵣ", title="Forcing Statistics");
+
+
+forcing_pdf = kde(X[:, r_cutoff])
+idxs_nozero = forcing_pdf.density .> 0
+gauss = fit(Normal, X[:, r_cutoff])
+
+l1 = lines!(ax, gauss, linestyle=:dash, linewidth=3, color=(mints_colors[1], 1.0))
+l2 = lines!(ax, forcing_pdf.x[idxs_nozero], forcing_pdf.density[idxs_nozero], linewidth=3, color=(mints_colors[2], 1.0))
+
+
+
+for i ∈ (r_cutoff+1):r
+    forcing_pdf = kde(X[:, i])
+    idxs_nozero = forcing_pdf.density .> 0
+    gauss = fit(Normal, X[:, i])
+
+    lines!(ax, gauss, linestyle=:dash, linewidth=1.5, color=(mints_colors[1],0.35))
+    lines!(ax, forcing_pdf.x[idxs_nozero], forcing_pdf.density[idxs_nozero], linewidth=1.5, color=(mints_colors[2],0.35))
+end
+
+ylims!(1e-1, nothing)
+xlims!(-0.01, 0.01)
+axislegend(ax, [l1, l2], ["Gaussian Fit", "Actual PDF"])
+
+fig
+
+save(joinpath(fig_savepath, "forcing-statistics.pdf"), fig)
+
+size(X)
+X_f = zeros(size(X,1), n_control)
+
+for i ∈ axes(xs,1)
+    X_f[i,:] .= u(ts_full[i])
+end
+
+
+all(isapprox.(U*diagm(σ)*V', H; rtol=0.1))
+
+Ĥs = []
+for i ∈ 1:length(X̂s)
+    Xf = hcat(u(ts_x[i])...)
+    Ĥ = Ur*diagm(σr)*hcat(X̂s[i], Xf)'
+    push!(Ĥs, Ĥ)
+end
+
+
+
+fig = Figure();
+ax = Axis(fig[1,1], xlabel="time (hours)", ylabel="PM 2.5 (μg⋅m⁻³)", title="HAVOK Model for PM 2.5");
+tscale = 1/(60*60)
+
+ls = []
+for i ∈ 1:length(Ĥs)
+    l1 = lines!(ax, ts_x[i] .* tscale, Zs[i][n_embedding+2:end-3], linewidth=3, color=mints_colors[1])
+    l2 = lines!(ax, ts_x[i] .* tscale, Ĥs[i][1,:], linewidth=3, color=mints_colors[2])
+    if i == 1
+        push!(ls, l1)
+        push!(ls, l2)
+    end
+end
+
+axislegend(ax, ls, ["Original time series", "HAVOK model"])
+
+fig
+
+save(joinpath(fig_savepath, "havok-predictions.pdf"), fig)
+
+xlims!(ax, ts_x[1][1]*tscale, 1)
+ylims!(ax, 0, 100)
+
+fig
+
+save(joinpath(fig_savepath, "havok-predictions-zoomed.pdf"), fig)
+save(joinpath(fig_savepath, "havok-predictions-zoomed.png"), fig)
 
 
