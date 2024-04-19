@@ -32,7 +32,7 @@ TimeDelayEmbedding(z; nrow=4, method=:backward)
 datapath = "./data/processed"
 @assert ispath(datapath)
 figpath = "./figures"
-@assert ispath(figpath
+@assert ispath(figpath)
 
 
 datapath_lorenz = joinpath(datapath, "lorenz", "data.csv")

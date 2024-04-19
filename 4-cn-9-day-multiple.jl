@@ -1,3 +1,5 @@
+# HAVOK Model for Single Central Node
+
 using CSV, DataFrames
 using LinearAlgebra
 using DataInterpolations
@@ -67,8 +69,8 @@ df = CSV.read(joinpath(datapath_cn, "df-"*time_types[1]*".csv"), DataFrame);
 df_summary = CSV.read(joinpath(datapath_cn, "df-"*time_types[1]*"_summary.csv"), DataFrame);
 
 # parse datetime to correct type
-df.datetime = String.(df.datetime);
-df.datetime = parse.(ZonedDateTime, df.datetime);
+# df.datetime = String.(df.datetime);
+# df.datetime = parse.(ZonedDateTime, df.datetime);
 
 dt = (df.datetime[2]-df.datetime[1]).value / 1000
 
@@ -204,8 +206,6 @@ save(joinpath(fig_savepath, "singular-values.pdf"), fig)
 
 
 
-
-
 # set up data and derivatives
 Xs = []
 dXs = []
@@ -225,7 +225,8 @@ for i ∈ 1:length(Vrs)
 end
 
 
-
+X = vcat(Xs...);
+dX = vcat(dXs...);
 
 # fit model matrix
 
@@ -343,6 +344,7 @@ ax3 = Axis(fig[3,1], xlabel="time [hours]", ylabel="v₃")
 
 linkxaxes!(ax, ax2, ax3)
 
+ls = []
 for i ∈ 1:length(Xs)
     l1 = lines!(ax, ts_x[i] ./ (60^2), Xs[i][:,1], linewidth=2, color=mints_colors[1])
     l2 = lines!(ax, ts_x[i] ./ (60^2), X̂s[i][:,1], linewidth=2, alpha=0.75, color=mints_colors[2])
@@ -354,9 +356,13 @@ for i ∈ 1:length(Xs)
 
     l1 = lines!(ax3, ts_x[i] ./ (60^2), Xs[i][:,3], linewidth=2, color=mints_colors[1])
     l2 = lines!(ax3, ts_x[i] ./ (60^2), X̂s[i][:,3], linewidth=2, alpha=0.75, color=mints_colors[2])
+    if i == 1
+        push!(ls, l1)
+        push!(ls, l2)
+    end
 end
 
-axislegend(ax, [l1, l2], ["Embedding", "Fit"])
+axislegend(ax, ls, ["Embedding", "Fit"])
 xlims!(ax3, ts_full[1] ./ (60^2), ts_full[end] ./ 60^2)
 fig
 
@@ -403,7 +409,7 @@ save(joinpath(fig_savepath, "forcing-statistics.pdf"), fig)
 size(X)
 X_f = zeros(size(X,1), n_control)
 
-for i ∈ axes(xs,1)
+for i ∈ axes(X_f,1)
     X_f[i,:] .= u(ts_full[i])
 end
 

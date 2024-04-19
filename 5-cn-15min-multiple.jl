@@ -1,16 +1,22 @@
+# HAVOK Model for Single Central Node
+# Using 15-min data of joined time
+# series with gaps
+
+
+
 using CSV, DataFrames
 using LinearAlgebra
 using DataInterpolations
 using DifferentialEquations
 using Statistics, StatsBase, Distributions, KernelDensity
 using Dates, TimeZones
+using DataInterpolations
+
 
 using CairoMakie
 include("./makie-defaults.jl")
 include("./viz.jl")
 include("./utils.jl")
-
-
 
 
 
@@ -47,6 +53,7 @@ end
 
 
 time_types = [
+    "1-sec",
     "1-min",
     "15-min",
     "1-hour",
@@ -54,87 +61,101 @@ time_types = [
 
 
 f_to_use = 1
+t_to_use = 3
 datapath_cn = datapaths_cn[f_to_use]
-fig_savepath = fig_savepaths[f_to_use]
+fig_savepath = joinpath(fig_savepaths[f_to_use], "df-15-min-no-interp")
+if !ispath(fig_savepath)
+    mkpath(fig_savepath)
+end
+
 
 # load in a csv and it's associated summary
-df = CSV.read(joinpath(datapath_cn, "df-"*time_types[2]*".csv"), DataFrame);
-df_summary = CSV.read(joinpath(datapath_cn, "df-"*time_types[2]*"_summary.csv"), DataFrame);
+df = CSV.read(joinpath(datapath_cn, "df-"*time_types[t_to_use]*".csv"), DataFrame);
+df_summary = CSV.read(joinpath(datapath_cn, "df-"*time_types[t_to_use]*"_summary.csv"), DataFrame);
 
-
-df.datetime[1]
-df.datetime[end]
 
 # parse datetime to correct type
-df.datetime = String.(df.datetime);
-df.datetime = parse.(ZonedDateTime, df.datetime);
+# df.datetime = String.(df.datetime);
+# df.datetime = parse.(ZonedDateTime, df.datetime);
 
-# compute embedding dimension to acheive at least 24 hour coverage
-dt = (df.datetime[2] - df.datetime[1]).value / (1000*60*60*24)
+dt = (df.datetime[2]-df.datetime[1]).value / 1000
 
-# use a day's worth of data for the feature vector
-#n_embedding = min(ceil(Int,1/dt), 100)
+
+println(Second(df.datetime[2] - df.datetime[1]))
+
+
+# t1 = Date(2023, 5, 29);
+# t2 = Date(2023, 6, 8);
+
+
+# idx_start = argmin([abs((Date(dt) - t1).value) for dt ∈ df.datetime])
+# idx_end = argmin([abs((Date(dt) - t2).value) for dt ∈ df.datetime])
+
+
+# df = df[idx_start:idx_end,:]
+
+
+# set up parameters for integration
+
+# n_embedding = 100
+# n_derivative = 5
+# r_cutoff = 18
+# n_control = 10
+# r = r_cutoff + n_control - 1
+
 n_embedding = 100
 n_derivative = 5
-r_cutoff = 18
-n_control = 1
+r_cutoff = 15
+n_control = 10
 r = r_cutoff + n_control - 1
 
 
-# select groups which have nrow ≥ n_embedding + n_derivative
-idx_good = findall(df_summary.nrow .≥ n_embedding + n_derivative)
-groups_to_use = df_summary.group[idx_good]
-df = df[findall([g ∈ groups_to_use for g ∈ df.group]), :]
-gdf = groupby(df, :group)
-
-# get idxs for each group
+# create a single dataset interpolated to every second
 col_to_use = :pm2_5
+
+
 t_start = df.datetime[1]
 t_end = df.datetime[end]
+
+df.dt = [(Second(dt - t_start)).value for dt ∈ df.datetime]
+
 
 Zs = []
 ts = []
 
-for dfᵢ ∈ gdf
-    push!(Zs, dfᵢ[:, col_to_use])
-    push!(ts, dfᵢ.dt)
+gdf = groupby(df, :group)
+
+for df_g ∈ gdf
+    if nrow(df_g) .≥ n_embedding + n_derivative
+        push!(Zs, df_g[:, col_to_use])
+        push!(ts, df_g.dt)
+    end
 end
 
 
-
 # visualize the time-series
-x_tick_months = t_start:Month(1):(t_end + Month(1))
-x_tick_pos = [Minute(d - t_start).value for d ∈ x_tick_months]
-x_tick_strings = [Dates.format.(d, "mm-yy") for d ∈ x_tick_months]
-
-
+#x_tick= t_start:Day(1):t_end
+x_tick= (round(t_start, Month)-Month(1)):Month(2):(round(t_end, Month) + Month(1))
+x_tick_pos = [Second(d - t_start).value for d ∈ x_tick]
+x_tick_strings = [Dates.format.(d, "mm/yy") for d ∈ x_tick]
 
 fig = Figure();
-ax = Axis(
-    fig[1,1],
-    xlabel="time", ylabel="PM 2.5 (μg⋅m⁻³)",
-    xticks=(x_tick_pos, x_tick_strings), xticklabelrotation=π/3,
-);
-xlims!(ax, 0, x_tick_pos[end])
+ax = Axis(fig[1,1], xlabel="time", ylabel="PM 2.5 (μg⋅m⁻3)", xticks=(x_tick_pos, x_tick_strings), xticklabelrotation=π/3);
 
-ls = []
 for i ∈ 1:length(Zs)
-    l = lines!(ax, ts[i], Zs[i], linewidth=3)
-    push!(ls, l)
+    lines!(ax, ts[i], Zs[i], linewidth=3, color=mints_colors[1])
 end
 
 fig
 
-save(joinpath(fig_savepath, "timeseries-grouped.png"), fig)
+save(joinpath(fig_savepath, "original-timeseries.png"), fig)
 
 
 
-
-# Get Hankel Matrix of time-delay embeddings
-# generate individual Hankel matrices
-Hs = [TimeDelayEmbedding(Z, nrow=n_embedding) for Z ∈ Zs];
+Hs = [TimeDelayEmbedding(Z, nrow=n_embedding; method=:backward) for Z ∈ Zs];
 ts_s = [t[n_embedding:end] for t ∈ ts];
-H = hcat(Hs...);
+H = hcat(Hs...)
+
 
 # generate indices of each component matrix so we can split
 # after doing the SVD
@@ -146,63 +167,58 @@ for i ∈ 1:length(Hs)
     i_now += size(Hᵢ,2)
 end
 
+
 # compute singular value decomposition
-U, σ, V = svd(H);
-
-
-# plot singular values
-fig = Figure();
-ax = Axis(fig[1,1], xlabel="index i", ylabel="σᵢ", title="Scaled Singular Values")
-vlines!(ax, [r_cutoff], color=mints_colors[2], label="r = $(r_cutoff)")
-scatter!(ax, σ ./ maximum(σ),)
-axislegend(ax)
-fig
-
-save(joinpath(fig_savepath, "singular-values.pdf"), fig)
-
+U, σ, V = svd(H)
 
 Vr = @view V[:,1:r]
 Ur = @view U[:,1:r]
 σr = @view σ[1:r]
 
-# Vrs = [Vr[idx, :] for idx ∈ idxs_H]
-Vrs = [Vr[idxs_H[2], :],]
+size(H)
+
+Vrs = [Vr[idx, :] for idx ∈ idxs_H]
 
 
-# visualize the embedded attractor
-
+# visualize the attractor:
 fig = Figure();
-ax = Axis3(
-    fig[1,1];
-    xlabel="v₁",
-    ylabel="v₂",
-    zlabel="v₃",
-    # aspect = :data,
-    azimuth=-35π/180,
-    elevation=37π/180,
-    xticksvisible=false,
-    yticksvisible=false,
-    zticksvisible=false,
-    xticklabelsvisible=false,
-    yticklabelsvisible=false,
-    zticklabelsvisible=false,
-    xlabeloffset=5,
-    ylabeloffset=5,
-    zlabeloffset=5,
-    title="Embedded Attractor"
-);
-
-
+ax1 = Axis3(fig[1,1];
+            xlabel="v₁",
+            ylabel="v₂",
+            zlabel="v₃",
+            # aspect = :data,
+            azimuth=-35π/180,
+            elevation=30π/180,
+            xticksvisible=false,
+            yticksvisible=false,
+            zticksvisible=false,
+            xticklabelsvisible=false,
+            yticklabelsvisible=false,
+            zticklabelsvisible=false,
+            xlabeloffset=5,
+            ylabeloffset=5,
+            zlabeloffset=5,
+            title="Original Attractor"
+            );
 for i ∈ 1:length(Vrs)
-    Vᵢ = Vrs[i]
-    l1 = lines!(ax, Vᵢ[:,1], Vᵢ[:,2], Vᵢ[:,3], color=ts[i][n_embedding:end], colormap=:inferno, linewidth=3)
+    lines!(ax1, Vrs[i][:,1], Vrs[i][:,2], Vrs[i][:,3], color=ts[i][n_embedding:end], colormap=:inferno, linewidth=3)
 end
 
 fig
 
-save(joinpath(fig_savepath, "svd-attarctor.png"), fig)
+save(joinpath(fig_savepath, "svd-attractor.png"), fig)
 
 
+
+# visualize singular values
+fig = Figure();
+ax = Axis(fig[1,1]; xlabel="index", ylabel="Normalized singular value")
+lines!(ax, σ./sum(σ), linewidth=3)
+vlines!(ax, [r_cutoff], linewidth=3, color=mints_colors[2], label="r = $(r_cutoff)")
+axislegend(ax)
+fig
+
+save(joinpath(fig_savepath, "singular-values.pdf"), fig)
 
 
 
@@ -228,20 +244,19 @@ end
 X = vcat(Xs...);
 dX = vcat(dXs...);
 
+# fit model matrix
 
-# solve for HAVOK coefficients
-Ξ = (X\dX)'
-
-A = Ξ[:, 1:r-n_control]          # State matrix A
+Ξ = (X\dX)'  # now Ξx = dx for a single column vector view
+A = Ξ[:, 1:r-n_control]   # State matrix A
 B = Ξ[:, r-n_control+1:end]      # Control matrix B
 
+
+# visualize the learned operators
 fig = Figure();
 gl = fig[1,1:2] = GridLayout()
 ax1 = Axis(gl[1,1];
            yreversed=true,
-           #xlabel="A",
-           title="A",
-           titlesize=50,
+           xlabel="A",
            xticklabelsvisible=false,
            yticklabelsvisible=false,
            xticksvisible=false,
@@ -250,9 +265,7 @@ ax1 = Axis(gl[1,1];
 
 ax2 = Axis(gl[1,2];
            yreversed=true,
-           #xlabel="B",
-           title="B",
-           titlesize=50,
+           xlabel="B",
            xticklabelsvisible=false,
            yticklabelsvisible=false,
            xticksvisible=false,
@@ -261,15 +274,12 @@ ax2 = Axis(gl[1,2];
 
 h1 = heatmap!(ax1, A, colormap=:inferno)
 h2 = heatmap!(ax2, B', colormap=:inferno)
-
-colsize!(gl, 2, Relative(n_control/r)) # scale control column to correct size
-cb = Colorbar(fig[1,3], limits = extrema(Ξ), colormap=:inferno)
-#cb = Colorbar(fig[1,3], limits =(-60,60), colormap=:inferno)
+colsize!(gl, 2, Relative(n_control/r))
+cb = Colorbar(fig[1,3], limits=extrema(Ξ), colormap=:inferno)
 fig
 
+
 save(joinpath(fig_savepath, "operator-heatmap.pdf"), fig)
-
-
 
 
 
@@ -280,21 +290,22 @@ ax = Axis(fig[1,1], title="Eigenmodes");
 ls1 = []
 ls2 = []
 lr = []
+# p = plot([], yticks=[-0.3, 0.0, 0.3], legend=:outerright, label="")
 
-for i ∈ 1:r_cutoff
+for i ∈ 1:r
     if i ≤ 3
-        l = lines!(ax, 1:n_embedding, Ur[:,i], color=mints_colors[1], linewidth=3)
+        l = lines!(ax, 1:100, Ur[:,i], color=mints_colors[1], linewidth=3)
         push!(ls1, l)
-    elseif i > 3 && i < r_cutoff
-        l = lines!(ax, 1:n_embedding, Ur[:,i], color=:grey, alpha=0.5, linewidth=3)
+    elseif i > 3 && i < r
+        l = lines!(ax, 1:100, Ur[:,i], color=:grey, alpha=0.2, linewidth=3)
         push!(ls2, l)
     else
-        l = lines!(ax, 1:n_embedding, Ur[:,i], color=mints_colors[2], linewidth=3)
+        l = lines!(ax, 1:100, Ur[:,i], color=mints_colors[2], linewidth=3)
         push!(lr, l)
     end
 end
 
-axislegend(ax, [ls1..., ls2[1], lr[1]], ["u₁", "u₂", "u₃", "⋮", "uᵣ"])
+axislegend(ax, [ls1..., ls2[1], lr[1]], ["u₁", "u₂", "u₃", "⋮", "uᵣ₁"])
 
 fig
 
@@ -303,45 +314,179 @@ save(joinpath(fig_savepath, "svd-eigenmodes.pdf"), fig)
 
 
 
-ts_full = vcat(ts_s...)
-itps = [DataInterpolations.LinearInterpolation(Vr[:,j], ts_full) for j ∈ r-n_control+1:r]
+
+# define interpolation function for forcing coordinate(s)
+#   +3 because of offset from derivative...
+
+length(ts_s[1])
+size(Hs[1])
+size(Vrs[1])
+
+
+ts_x = [range(ts[i][n_embedding+2], step=dt, length=size(dXs[i],1)) for i ∈ 1:length(Xs)]
+
+ts_full = vcat(ts_x...)
+itps = [DataInterpolations.LinearInterpolation(X[:,j], ts_full) for j ∈ r-n_control+1:r]
 u(t) = [itp(t) for itp ∈ itps]
 
 
-ts_x = [t[3:end-3] for t ∈ ts_s]
-ts_x_full = vcat(ts_x...)
-
-xr = vcat(u.(ts_x_full)...)
-size(xr)
-size(X)
-
-
-function f!(dx, x, (A,B), t)
-    dx .= A*x  + B*u(t)
+# define function and integrate to get model predictions
+function f!(dx, x, p, t)
+    A,B = p
+    dx .= A*x + B*u(t)
 end
 
 X̂s = []
-X̂s_test = []
-
 
 for i ∈ 1:length(Xs)
-    ps = (A, B)
-
+    params = (A, B)
     x₀ = Xs[i][1,1:r-n_control]
     dx = copy(x₀)
-    @assert size(x₀) == size(dx)
 
-    prob = ODEProblem(f!, x₀, (ts_x[i][1], ts_x[i][end]), ps)
-    sol = solve(prob, saveat=ts_x[i]);
+    prob = ODEProblem(f!, x₀, (ts_x[i][1], ts_x[i][end]), params);
+    sol = solve(prob, saveat=ts[i]);
 
     X̂ = Matrix(sol)'
-    X̂test = Matrix(sol)'
-
-    size(Xs[1])
-    size(X̂)
-
     push!(X̂s, X̂)
-    push!(X̂s_test, X̂test)
 end
+
+
+
+# 15. visualize results
+fig = Figure();
+ax = Axis(fig[2,1], ylabel="v₁", xticksvisible=false, xticklabelsvisible=false, xticks=(x_tick_pos, x_tick_strings), yticklabelsize=15,)
+ax2 = Axis(fig[3,1], ylabel="v₂", xticksvisible=false, xticklabelsvisible=false, xticks=(x_tick_pos, x_tick_strings), yticklabelsize=15,)
+ax3 = Axis(fig[4,1], ylabel="v₃", xticks=(x_tick_pos, x_tick_strings), xticklabelrotation=π/3, yticklabelsize=15, xticklabelsize=15)
+
+linkxaxes!(ax, ax2, ax3)
+
+ls = []
+for i ∈ 1:length(Xs)
+    l1 = lines!(ax, ts_x[i], Xs[i][:,1], linewidth=2, color=mints_colors[1])
+    l2 = lines!(ax, ts_x[i], X̂s[i][:,1], linewidth=2, alpha=0.75, color=mints_colors[2])
+
+
+    l1 = lines!(ax2, ts_x[i], Xs[i][:,2], linewidth=2, color=mints_colors[1])
+    l2 = lines!(ax2, ts_x[i], X̂s[i][:,2], linewidth=2, alpha=0.75, color=mints_colors[2])
+
+
+    l1 = lines!(ax3, ts_x[i], Xs[i][:,3], linewidth=2, color=mints_colors[1])
+    l2 = lines!(ax3, ts_x[i], X̂s[i][:,3], linewidth=2, alpha=0.75, color=mints_colors[2])
+
+    if i == 1
+        push!(ls, l1)
+        push!(ls, l2)
+    end
+end
+
+#axislegend(ax, ls, ["Embedding", "Fit"])
+fig[1,1] = Legend(fig, ls, ["Embedding", "Fit"], framevisible=false, orientation=:horizontal, padding=(0,0,0,0), labelsize=17, height=-5)
+
+# xlims!(ax3, ts_full[1], ts_full[end])
+fig
+
+save(joinpath(fig_savepath, "reconstructed-embedding-coords.png"), fig)
+
+xlims!(ax3, 0, 3)
+fig
+
+save(joinpath(fig_savepath, "reconstructed-embedding-coords__zoomed.png"), fig)
+
+
+
+# Plot statistics of forcing function
+fig = Figure();
+ax = Axis(fig[2,1], yscale=log10, xlabel="vᵣ");
+
+
+forcing_pdf = kde(X[:, r_cutoff])
+idxs_nozero = forcing_pdf.density .> 0
+gauss = fit(Normal, X[:, r_cutoff])
+
+l1 = lines!(ax, gauss, linestyle=:dash, linewidth=3, color=(mints_colors[1], 1.0))
+l2 = lines!(ax, forcing_pdf.x[idxs_nozero], forcing_pdf.density[idxs_nozero], linewidth=3, color=(mints_colors[2], 1.0))
+
+
+
+for i ∈ (r_cutoff+1):r
+    forcing_pdf = kde(X[:, i])
+    idxs_nozero = forcing_pdf.density .> 0
+    gauss = fit(Normal, X[:, i])
+
+    lines!(ax, gauss, linestyle=:dash, linewidth=1.5, color=(mints_colors[1],0.35))
+    lines!(ax, forcing_pdf.x[idxs_nozero], forcing_pdf.density[idxs_nozero], linewidth=1.5, color=(mints_colors[2],0.35))
+end
+
+ylims!(10^0.6, 10^2.3)
+xlims!(-0.01, 0.01)
+# axislegend(ax, [l1, l2], ["Gaussian Fit", "Actual PDF"])
+fig[1,1] = Legend(fig, [l1, l2], ["Gaussian Fit", "Actual PDF"], framevisible=false, orientation=:horizontal, padding=(0,0,0,0), labelsize=17, height=-5)
+fig
+
+save(joinpath(fig_savepath, "forcing-statistics.pdf"), fig)
+
+size(X)
+X_f = zeros(size(X,1), n_control)
+
+for i ∈ axes(X_f,1)
+    X_f[i,:] .= u(ts_full[i])
+end
+
+
+all(isapprox.(U*diagm(σ)*V', H; rtol=0.1))
+
+Ĥs = []
+for i ∈ 1:length(X̂s)
+    Xf = hcat(u(ts_x[i])...)
+    Ĥ = Ur*diagm(σr)*hcat(X̂s[i], Xf)'
+    push!(Ĥs, Ĥ)
+end
+
+
+
+fig = Figure();
+ax = Axis(fig[2,1], ylabel="PM 2.5 (μg⋅m⁻³)", xticks=(x_tick_pos, x_tick_strings), xticklabelrotation=π/3);
+# tscale = 1/(60*60)
+tscale = 1
+
+ls = []
+for i ∈ 1:length(Ĥs)
+    l1 = lines!(ax, ts_x[i] .* tscale, Zs[i][n_embedding+2:end-3], linewidth=3, color=mints_colors[1])
+    l2 = lines!(ax, ts_x[i] .* tscale, Ĥs[i][1,:], linewidth=3, color=mints_colors[2])
+    if i == 1
+        push!(ls, l1)
+        push!(ls, l2)
+    end
+end
+
+# axislegend(ax, ls, ["Original time series", "HAVOK model"])
+fig[1,1] = Legend(fig, ls, ["Original time series", "HAVOK model"], framevisible=false, orientation=:horizontal, padding=(0,0,0,0), labelsize=17, height=-5)
+
+fig
+
+save(joinpath(fig_savepath, "havok-predictions.pdf"), fig)
+
+
+
+
+fig = Figure();
+ax = Axis(fig[2,1], ylabel="PM 2.5 (μg⋅m⁻³)", xlabel="time (days)");
+
+tscale = 1/(60*60*24)
+
+idx_plot = 1
+
+l1 = lines!(ax, ts_x[idx_plot] .* tscale, Zs[idx_plot][n_embedding+2:end-3], linewidth=3, color=mints_colors[1])
+l2 = lines!(ax, ts_x[idx_plot] .* tscale, Ĥs[idx_plot][1,:], linewidth=3, color=mints_colors[2])
+
+fig[1,1] = Legend(fig, [l1, l2], ["Original time series", "HAVOK model"], framevisible=false, orientation=:horizontal, padding=(0,0,0,0), labelsize=17, height=-5)
+
+xlims!(ax, ts_x[idx_plot][1]*tscale, ts_x[idx_plot][1]*tscale + 2)
+
+fig
+
+save(joinpath(fig_savepath, "havok-predictions-zoomed.pdf"), fig)
+save(joinpath(fig_savepath, "havok-predictions-zoomed.png"), fig)
+
 
 

@@ -25,7 +25,8 @@ end
 
 
 d_start = Date(2021, 1, 1)
-d_end = Date(2024, 1, 1)
+# d_end = Date(2024, 1, 1)
+d_end = Date(2024, 4, 18)
 
 nodes = [
     "Central Hub 4",
@@ -86,6 +87,13 @@ end
 
 cols_to_keep = [:pm0_1, :pm0_3, :pm0_5, :pm1_0, :pm2_5, :pm5_0, :pm10_0]
 
+
+
+# test_path = joinpath(out_path, "central-hub-4", readdir(joinpath(out_path, "central-hub-4"))[1])
+# df_orig = CSV.read(test_path, DataFrame)
+# df = process_df(test_path)
+
+# df.datetime
 
 function process_df(df_path)
     # 1. load data

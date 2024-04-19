@@ -222,7 +222,7 @@ for i ∈ 1:length(Xs)
     end
 end
 
-axislegend(ax, [l1, l2], ["Embedding", "Fit"])
+axislegend(ax, ls, ["Embedding", "Fit"])
 xlims!(ax, 0, 50)
 
 fig

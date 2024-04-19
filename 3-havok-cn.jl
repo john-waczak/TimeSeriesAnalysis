@@ -1,3 +1,5 @@
+# HAVOK Model for Single Central Node
+
 using CSV, DataFrames
 using LinearAlgebra
 using DataInterpolations
@@ -67,9 +69,8 @@ df = CSV.read(joinpath(datapath_cn, "df-"*time_types[1]*".csv"), DataFrame);
 df_summary = CSV.read(joinpath(datapath_cn, "df-"*time_types[1]*"_summary.csv"), DataFrame);
 
 # parse datetime to correct type
-df.datetime = String.(df.datetime);
-df.datetime = parse.(ZonedDateTime, df.datetime);
-
+# df.datetime = String.(df.datetime);
+# df.datetime = parse.(ZonedDateTime, df.datetime);
 println(Second(df.datetime[2] - df.datetime[1]))
 
 
