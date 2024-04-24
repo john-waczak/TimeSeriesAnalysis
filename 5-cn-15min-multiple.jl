@@ -203,8 +203,6 @@ for i ∈ 1:length(Xs)
 end
 
 
-
-
 # Reconstruct original time series from predictions
 
 size(X)
@@ -223,5 +221,52 @@ for i ∈ 1:length(X̂s)
     Ĥ = Ur*diagm(σr)*hcat(X̂s[i], Xf)'
     push!(Ĥs, Ĥ)
 end
+
+
+
+fig = Figure();
+ax = Axis(fig[2,1], ylabel="PM 2.5 (μg⋅m⁻³)", xticks=(x_tick_pos, x_tick_strings), xticklabelrotation=π/3);
+# tscale = 1/(60*60)
+tscale = 1
+
+ls = []
+for i ∈ 1:length(Ĥs)
+    l1 = lines!(ax, ts_x[i] .* tscale, Zs[i][n_embedding+2:end-3], linewidth=3, color=mints_colors[1])
+    l2 = lines!(ax, ts_x[i] .* tscale, Ĥs[i][1,:], linewidth=3, color=mints_colors[2])
+    if i == 1
+        push!(ls, l1)
+        push!(ls, l2)
+    end
+end
+
+# axislegend(ax, ls, ["Original time series", "HAVOK model"])
+fig[1,1] = Legend(fig, ls, ["Original time series", "HAVOK model"], framevisible=false, orientation=:horizontal, padding=(0,0,0,0), labelsize=17, height=-5)
+
+fig
+
+save(joinpath(fig_savepath, "havok-predictions.pdf"), fig)
+
+
+
+
+fig = Figure();
+ax = Axis(fig[2,1], ylabel="PM 2.5 (μg⋅m⁻³)", xlabel="time (days)");
+
+tscale = 1/(60*60*24)
+
+idx_plot = 1
+
+l1 = lines!(ax, ts_x[idx_plot] .* tscale, Zs[idx_plot][n_embedding+2:end-3], linewidth=3, color=mints_colors[1])
+l2 = lines!(ax, ts_x[idx_plot] .* tscale, Ĥs[idx_plot][1,:], linewidth=3, color=mints_colors[2])
+
+fig[1,1] = Legend(fig, [l1, l2], ["Original time series", "HAVOK model"], framevisible=false, orientation=:horizontal, padding=(0,0,0,0), labelsize=17, height=-5)
+
+xlims!(ax, ts_x[idx_plot][1]*tscale, ts_x[idx_plot][1]*tscale + 2)
+
+fig
+
+save(joinpath(fig_savepath, "havok-predictions-zoomed.pdf"), fig)
+save(joinpath(fig_savepath, "havok-predictions-zoomed.png"), fig)
+
 
 
