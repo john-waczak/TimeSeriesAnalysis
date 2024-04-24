@@ -2,8 +2,6 @@
 # Using 15-min data of joined time
 # series with gaps
 
-# https://docs.sciml.ai/Overview/stable/showcase/missing_physics/
-
 using CSV, DataFrames
 using LinearAlgebra
 using DataInterpolations
@@ -38,18 +36,7 @@ datapaths_cn = [
     joinpath(datapath, "central-nodes", "central-hub-10"),
 ]
 
-fig_savepaths = [
-    joinpath(figpath, "central-hub-4"),
-    joinpath(figpath, "central-hub-7"),
-    joinpath(figpath, "central-hub-10"),
-]
-
-if !any(ispath.(fig_savepaths))
-    mkpath.(fig_savepaths)
-end
-
 @assert all(ispath.(datapaths_cn))
-@assert all(ispath.(fig_savepaths))
 
 
 time_types = [
@@ -59,78 +46,96 @@ time_types = [
     "1-hour",
 ]
 
-
-f_to_use = 1
-t_to_use = 3
-datapath_cn = datapaths_cn[f_to_use]
-fig_savepath = joinpath(fig_savepaths[f_to_use], "df-15-min-no-interp")
+fig_savepath = joinpath(figpath, "mult-central-hub", "15-min-gap")
 if !ispath(fig_savepath)
     mkpath(fig_savepath)
 end
 
-
-# load in a csv and it's associated summary
-df = CSV.read(joinpath(datapath_cn, "df-"*time_types[t_to_use]*".csv"), DataFrame);
-df_summary = CSV.read(joinpath(datapath_cn, "df-"*time_types[t_to_use]*"_summary.csv"), DataFrame);
+t_to_use = 3
 
 
-# parse datetime to correct type
-# df.datetime = String.(df.datetime);
-# df.datetime = parse.(ZonedDateTime, df.datetime);
+# load in a csvs and associated summarys
+dfs = Dict(
+    :4 => Dict(
+        :df => CSV.read(joinpath(datapaths_cn[1], "df-"*time_types[t_to_use]*".csv"), DataFrame),
+        :summary => CSV.read(joinpath(datapaths_cn[1], "df-"*time_types[t_to_use]*"_summary.csv"), DataFrame),
+        :Zs => Vector{Float64}[],
+        :ts => Vector{Int64}[],
+        :Hs => Matrix{Float64}[],
+        :ts_s => Vector{Int64}[],
+        :idxs_H => Vector{Int64}[],
+    ),
+    :7 => Dict(
+        :df => CSV.read(joinpath(datapaths_cn[2], "df-"*time_types[t_to_use]*".csv"), DataFrame),
+        :summary => CSV.read(joinpath(datapaths_cn[2], "df-"*time_types[t_to_use]*"_summary.csv"), DataFrame),
+        :Zs => Vector{Float64}[],
+        :ts => Vector{Int64}[],
+        :Hs => Matrix{Float64}[],
+        :ts_s => Vector{Int64}[],
+        :idxs_H => Vector{Int64}[],
+    ),
+    :10 => Dict(
+        :df => CSV.read(joinpath(datapaths_cn[3], "df-"*time_types[t_to_use]*".csv"), DataFrame),
+        :summary => CSV.read(joinpath(datapaths_cn[3], "df-"*time_types[t_to_use]*"_summary.csv"), DataFrame),
+        :Zs => Vector{Float64}[],
+        :ts => Vector{Int64}[],
+        :Hs => Matrix{Float64}[],
+        :ts_s => Vector{Int64}[],
+        :idxs_H => Vector{Int64}[],
+    ),
+)
 
-dt = (df.datetime[2]-df.datetime[1]).value / 1000
 
+dt4 = (dfs[:4][:df].datetime[2]-dfs[:4][:df].datetime[1]).value / 1000
+dt7 = (dfs[:7][:df].datetime[2]-dfs[:7][:df].datetime[1]).value / 1000
+dt10 = (dfs[:10][:df].datetime[2]-dfs[:10][:df].datetime[1]).value / 1000
 
-println(Second(df.datetime[2] - df.datetime[1]))
+@assert (dt4 == dt7) && (dt7 == dt10)
 
+dt = dt4
 
-# t1 = Date(2023, 5, 29);
-# t2 = Date(2023, 6, 8);
-
-
-# idx_start = argmin([abs((Date(dt) - t1).value) for dt ∈ df.datetime])
-# idx_end = argmin([abs((Date(dt) - t2).value) for dt ∈ df.datetime])
-
-
-# df = df[idx_start:idx_end,:]
-
-
-# set up parameters for integration
-
-# n_embedding = 100
-# n_derivative = 5
-# r_cutoff = 18
-# n_control = 10
-# r = r_cutoff + n_control - 1
-
-n_embedding = 100
+nhours = 48
+n_embedding = max(round(Int, nhours*60*60 / dt), 100)
 n_derivative = 5
-r_cutoff = 15
+r_cutoff = 18
 n_control = 10
 r = r_cutoff + n_control - 1
 
-
-# create a single dataset interpolated to every second
 col_to_use = :pm2_5
 
 
-t_start = df.datetime[1]
-t_end = df.datetime[end]
+# get global start and end time
+t_starts = []
+t_ends = []
+for (node, df_dict) ∈ dfs
+    t_start = df_dict[:df].datetime[1]
+    t_end = df_dict[:df].datetime[end]
+    push!(t_starts, t_start)
+    push!(t_ends, t_end)
+end
 
-df.dt = [(Second(dt - t_start)).value for dt ∈ df.datetime]
+t_start = minimum(t_starts)
+t_end = minimum(t_ends)
 
 
-Zs = []
-ts = []
+# add dt to each dataframe
+for (node, df_dict) ∈ dfs
+    df_dict[:df].dt = [(Second(dt - t_start)).value for dt ∈ df_dict[:df].datetime]
+end
 
-gdf = groupby(df, :group)
 
-for df_g ∈ gdf
-    if nrow(df_g) .≥ n_embedding + n_derivative
-        push!(Zs, df_g[:, col_to_use])
-        push!(ts, df_g.dt)
+# pick out the column we want
+for (node, df_dict) ∈ dfs
+
+    gdf = groupby(df_dict[:df], :group)
+    for df_g ∈ gdf
+        if nrow(df_g) .≥ n_embedding + n_derivative
+            push!(df_dict[:Zs], Vector(df_g[:, col_to_use]))
+            push!(df_dict[:ts], Vector(df_g.dt))
+        end
     end
 end
+
 
 
 # visualize the time-series
@@ -140,44 +145,87 @@ x_tick_pos = [Second(d - t_start).value for d ∈ x_tick]
 x_tick_strings = [Dates.format.(d, "mm/yy") for d ∈ x_tick]
 
 fig = Figure();
-ax = Axis(fig[1,1], xlabel="time", ylabel="PM 2.5 (μg⋅m⁻3)", xticks=(x_tick_pos, x_tick_strings), xticklabelrotation=π/3);
+ax = Axis(fig[2,1], xlabel="time", ylabel="PM 2.5 (μg⋅m⁻3)", xticks=(x_tick_pos, x_tick_strings), xticklabelrotation=π/3);
 
-for i ∈ 1:length(Zs)
-    lines!(ax, ts[i], Zs[i], linewidth=3, color=mints_colors[1])
+ls = []
+idx_color = 1
+for node ∈ keys(dfs)
+    Zs = dfs[node][:Zs]
+    ts = dfs[node][:ts]
+
+    for i ∈ 1:length(Zs)
+        li = lines!(ax, ts[i], Zs[i], linewidth=2, color=(mints_colors[idx_color], 0.75))
+        if i == 1
+            push!(ls, li)
+        end
+    end
+
+    idx_color += 1
 end
 
-fig
+fig[1,1] = Legend(fig, ls, "Central Node " .* string.(keys(dfs)), framevisible=false, orientation=:horizontal, padding=(0,0,0,0), labelsize=17, height=-5)
 
 save(joinpath(fig_savepath, "original-timeseries.png"), fig)
 
 
-
-Hs = [TimeDelayEmbedding(Z, nrow=n_embedding; method=:backward) for Z ∈ Zs];
-ts_s = [t[n_embedding:end] for t ∈ ts];
-H = hcat(Hs...)
+# Generate time delay embeddings for each slice
+for (node, df_dict) ∈ dfs
+    df_dict[:Hs] = [TimeDelayEmbedding(Z, nrow=n_embedding; method=:backward) for Z ∈ df_dict[:Zs]];
+    df_dict[:ts_s] = [t[n_embedding:end] for t ∈ df_dict[:ts]];
+end
 
 
 # generate indices of each component matrix so we can split
 # after doing the SVD
-idxs_H = []
 i_now = 1
-for i ∈ 1:length(Hs)
-    Hᵢ = Hs[i]
-    push!(idxs_H, i_now:i_now + size(Hᵢ,2) - 1)
+for i ∈ 1:length(dfs[:4][:Hs])
+    Hᵢ = dfs[:4][:Hs][i]
+    push!(dfs[:4][:idxs_H], i_now:i_now + size(Hᵢ,2) - 1)
+    i_now += size(Hᵢ,2)
+end
+
+for i ∈ 1:length(dfs[:7][:Hs])
+    Hᵢ = dfs[:7][:Hs][i]
+    push!(dfs[:7][:idxs_H], i_now:i_now + size(Hᵢ,2) - 1)
+    i_now += size(Hᵢ,2)
+end
+
+for i ∈ 1:length(dfs[:10][:Hs])
+    Hᵢ = dfs[:10][:Hs][i]
+    push!(dfs[:10][:idxs_H], i_now:i_now + size(Hᵢ,2) - 1)
     i_now += size(Hᵢ,2)
 end
 
 
+size(dfs[:4][:Hs])
+size(dfs[:4][:ts_s])
+size(dfs[:4][:Zs])
+size(dfs[:4][:ts])
+size(dfs[:4][:idxs_H])
+
+
+H = hcat(
+    dfs[:4][:Hs]...,
+    dfs[:7][:Hs]...,
+    dfs[:10][:Hs]...,
+);
+
+
+
 # compute singular value decomposition
-U, σ, V = svd(H)
+U, σ, V = svd(H);
+
+# r_cut(σ, ratio=0.05, rmax=100)              # 42
+# r_optimal_approx(σ, size(V,2), size(V,1))   # 162
 
 Vr = @view V[:,1:r]
 Ur = @view U[:,1:r]
 σr = @view σ[1:r]
 
-size(H)
 
-Vrs = [Vr[idx, :] for idx ∈ idxs_H]
+
+Vrs = [Vr[idx, :] for idx ∈ vcat(dfs[:4][:idxs_H], dfs[:7][:idxs_H], dfs[:10][:idxs_H])]
+ts = vcat(dfs[:4][:ts_s], dfs[:7][:ts_s], dfs[:10][:ts_s])
 
 
 # visualize the attractor:
@@ -201,7 +249,7 @@ ax1 = Axis3(fig[1,1];
             title="Original Attractor"
             );
 for i ∈ 1:length(Vrs)
-    lines!(ax1, Vrs[i][:,1], Vrs[i][:,2], Vrs[i][:,3], color=ts[i][n_embedding:end], colormap=:inferno, linewidth=3)
+    lines!(ax1, Vrs[i][:,1], Vrs[i][:,2], Vrs[i][:,3], color=ts[i], colormap=:inferno, linewidth=3)
 end
 
 fig
@@ -278,7 +326,7 @@ colsize!(gl, 2, Relative(n_control/r))
 cb = Colorbar(fig[1,3], limits=extrema(Ξ), colormap=:inferno)
 fig
 
-
+fig
 save(joinpath(fig_savepath, "operator-heatmap.pdf"), fig)
 
 
@@ -294,13 +342,13 @@ lr = []
 
 for i ∈ 1:r
     if i ≤ 3
-        l = lines!(ax, 1:100, Ur[:,i], color=mints_colors[1], linewidth=3)
+        l = lines!(ax, 1:n_embedding, Ur[:,i], color=mints_colors[1], linewidth=3)
         push!(ls1, l)
     elseif i > 3 && i < r
-        l = lines!(ax, 1:100, Ur[:,i], color=:grey, alpha=0.2, linewidth=3)
+        l = lines!(ax, 1:n_embedding, Ur[:,i], color=:grey, alpha=0.2, linewidth=3)
         push!(ls2, l)
     else
-        l = lines!(ax, 1:100, Ur[:,i], color=mints_colors[2], linewidth=3)
+        l = lines!(ax, 1:n_embedding, Ur[:,i], color=mints_colors[2], linewidth=3)
         push!(lr, l)
     end
 end
@@ -318,14 +366,20 @@ save(joinpath(fig_savepath, "svd-eigenmodes.pdf"), fig)
 # define interpolation function for forcing coordinate(s)
 #   +3 because of offset from derivative...
 
-length(ts_s[1])
-size(Hs[1])
-size(Vrs[1])
-
+# set up interpolation for single sensor now...
+Zs = dfs[:4][:Zs];
+Hs = dfs[:4][:Hs];
+Vrs = Vrs[1:length(dfs[:4][:Hs])];
+Xs = Xs[1:length(dfs[:4][:Hs])];
+dXs = dXs[1:length(dfs[:4][:Hs])];
+X = vcat(Xs...);
+dX = vcat(dXs...);
+ts_s = dfs[:4][:ts_s];
+ts = dfs[:4][:ts];
 
 ts_x = [range(ts[i][n_embedding+2], step=dt, length=size(dXs[i],1)) for i ∈ 1:length(Xs)]
-
 ts_full = vcat(ts_x...)
+
 itps = [DataInterpolations.LinearInterpolation(X[:,j], ts_full) for j ∈ r-n_control+1:r]
 u(t) = [itp(t) for itp ∈ itps]
 
@@ -387,7 +441,7 @@ fig
 
 save(joinpath(fig_savepath, "reconstructed-embedding-coords.png"), fig)
 
-xlims!(ax3, 0, 3)
+xlims!(ax3, ts_s[1][1], ts_s[2][end])
 fig
 
 save(joinpath(fig_savepath, "reconstructed-embedding-coords__zoomed.png"), fig)
@@ -417,13 +471,16 @@ for i ∈ (r_cutoff+1):r
     lines!(ax, forcing_pdf.x[idxs_nozero], forcing_pdf.density[idxs_nozero], linewidth=1.5, color=(mints_colors[2],0.35))
 end
 
-ylims!(10^0.6, 10^2.3)
+# ylims!(10^(-0.5), 10^3)
 xlims!(-0.01, 0.01)
-# axislegend(ax, [l1, l2], ["Gaussian Fit", "Actual PDF"])
 fig[1,1] = Legend(fig, [l1, l2], ["Gaussian Fit", "Actual PDF"], framevisible=false, orientation=:horizontal, padding=(0,0,0,0), labelsize=17, height=-5)
 fig
 
 save(joinpath(fig_savepath, "forcing-statistics.pdf"), fig)
+
+
+
+
 
 size(X)
 X_f = zeros(size(X,1), n_control)
@@ -459,6 +516,7 @@ for i ∈ 1:length(Ĥs)
     end
 end
 
+
 # axislegend(ax, ls, ["Original time series", "HAVOK model"])
 fig[1,1] = Legend(fig, ls, ["Original time series", "HAVOK model"], framevisible=false, orientation=:horizontal, padding=(0,0,0,0), labelsize=17, height=-5)
 
@@ -487,6 +545,3 @@ fig
 
 save(joinpath(fig_savepath, "havok-predictions-zoomed.pdf"), fig)
 save(joinpath(fig_savepath, "havok-predictions-zoomed.png"), fig)
-
-
-

@@ -108,16 +108,14 @@ println(Second(df.datetime[2] - df.datetime[1]))
 # n_control = 10
 # r = r_cutoff + n_control - 1
 
-n_embedding = 100
+nhours = 48
+n_embedding = max(round(Int, nhours*60*60 / dt), 100)
 n_derivative = 5
-r_cutoff = 15
-n_control = 10
+r_cutoff = 20
+n_control = 1
 r = r_cutoff + n_control - 1
 
-
-# create a single dataset interpolated to every second
 col_to_use = :pm2_5
-
 
 t_start = df.datetime[1]
 t_end = df.datetime[end]
@@ -299,13 +297,13 @@ lr = []
 
 for i ∈ 1:r
     if i ≤ 3
-        l = lines!(ax, 1:100, Ur[:,i], color=mints_colors[1], linewidth=3)
+        l = lines!(ax, 1:n_embedding, Ur[:,i], color=mints_colors[1], linewidth=3)
         push!(ls1, l)
     elseif i > 3 && i < r
-        l = lines!(ax, 1:100, Ur[:,i], color=:grey, alpha=0.2, linewidth=3)
+        l = lines!(ax, 1:n_embedding, Ur[:,i], color=:grey, alpha=0.2, linewidth=3)
         push!(ls2, l)
     else
-        l = lines!(ax, 1:100, Ur[:,i], color=mints_colors[2], linewidth=3)
+        l = lines!(ax, 1:n_embedding, Ur[:,i], color=mints_colors[2], linewidth=3)
         push!(lr, l)
     end
 end
@@ -422,9 +420,8 @@ for i ∈ (r_cutoff+1):r
     lines!(ax, forcing_pdf.x[idxs_nozero], forcing_pdf.density[idxs_nozero], linewidth=1.5, color=(mints_colors[2],0.35))
 end
 
-ylims!(10^0.6, 10^2.3)
+ylims!(10^0.5, 10^2.5)
 xlims!(-0.01, 0.01)
-# axislegend(ax, [l1, l2], ["Gaussian Fit", "Actual PDF"])
 fig[1,1] = Legend(fig, [l1, l2], ["Gaussian Fit", "Actual PDF"], framevisible=false, orientation=:horizontal, padding=(0,0,0,0), labelsize=17, height=-5)
 fig
 

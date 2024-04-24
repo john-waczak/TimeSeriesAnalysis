@@ -38,3 +38,20 @@ function parse_datetime(dt)
     end
 end
 
+
+
+function r_cut(σ; ratio=0.01, rmax=15)
+    return min(sum(σ ./ sum(σ) .> ratio) + 1, rmax)
+end
+
+
+# see this paper: https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=e2428512fcfe5d907c0db26cae4546872a19a954
+function r_optimal_approx(σ, m, n)
+    β = m/n
+    ω = 0.56*β^3 - 0.95*β^2 + 1.82β + 1.43
+
+    r = length(σ[σ .< ω * median(σ)])
+end
+
+
+
