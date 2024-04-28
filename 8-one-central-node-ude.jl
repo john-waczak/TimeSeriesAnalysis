@@ -237,16 +237,17 @@ predict(p)
 
 
 function embedd_to_timeseries(Xpred, U_small, σ_small)
-    Ĥ = U_small * diagm(σ_small) * X̂
-    return Ĥ[end, :]
+    U_small[end, :]' * diagm(σ_small) * X̂
 end
 
 
 # compute loss by reconstructing original time series
 Z_orig = H[end, idx_train_short]
 # verify recovery of original time series from SVD
-Ĥ2 = Ur * diagm(σr) * Vr'
-Z_embedd = Ĥ2[end, idx_train_short]
+#Ĥ2 = Ur * diagm(σr) * Vr'
+#Z_embedd = Ĥ2[end, idx_train_short]
+Z_embedd  = Ur[end,:]' * diagm(σr) * Vr'
+
 # time series reconstruction from embedding
 X̂ = predict(p)
 Z_pred = embedd_to_timeseries(X̂, U_small, σ_small)
@@ -255,21 +256,19 @@ Z_pred = embedd_to_timeseries(X̂, U_small, σ_small)
 fig = Figure();
 ax = CairoMakie.Axis(fig[1,1], xlabel="t (min)", ylabel="PM 2.5 (μg/m³)")
 lines!(ax, ts_train_short ./ 60, Z_orig)
-lines!(ax, ts_train_short ./ 60, Z_pred2)
-lines!(ax, ts_train_short ./ 60, Z_pred)
+lines!(ax, ts_train_short ./ 60, Z_pred2[:])
+lines!(ax, ts_train_short ./ 60, Z_pred[:])
 fig
 
 
 
 function loss(θ)
     X̂ = predict(θ)
-    Z_pred = embedd_to_timeseries(X̂, U_small, σ_small)
-
+    Z_pred = (U_small[end,:]' * diagm(σ_small) * X̂)'
     mean(abs2, Z_pred .- Z_orig)
 end
 
 loss(p)
-
 
 # set up array to track loss function with callback
 losses = Float64[]
@@ -293,7 +292,12 @@ optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
 
 # Train first using ADAM for rapid convergence to local minimum
 # this step may take a while...
+# res1 = Optimization.solve(optprob, ADAM(), callback=callback, maxiters=1)
+
+
 res1 = Optimization.solve(optprob, ADAM(), callback=callback, maxiters=5000)
+
+
 
 save(joinpath(fig_savepath, "model_params.jld2"), Dict(:ps_trained => res1.u, :st => _st))
 
