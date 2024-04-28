@@ -61,3 +61,33 @@ end
 
 
 
+function load_data(df_path, t1, t2, col_to_use; interp=true)
+    println("Loading data...")
+    df = CSV.read(datapath, DataFrame, select=[:datetime, col_to_use]);
+
+    # find indices closest to t1 and t2
+    idx_start = argmin([abs((Date(dt) - t1).value) for dt ∈ df.datetime])
+    idx_end = argmin([abs((Date(dt) - t2).value) for dt ∈ df.datetime])
+
+    # clip to t1 and t2
+    println("Clipping to $(t1)-$(t2)")
+    df = df[idx_start:idx_end,:]
+
+    # create a single dataset interpolated to every second
+    if interp
+        println("Interpolating to 1s")
+        zs_df = df[:, col_to_use];
+        ts_df = [(dt_f .- df.datetime[1]).value ./ 1000 for dt_f ∈ df.datetime];
+        z_itp = LinearInterpolation(zs_df, ts_df)
+
+        ts = ts_df[1]:ts_df[end]
+        Zs = z_itp.(ts)
+    else
+        ts = td_df
+        Zs = zd_df
+    end
+
+    return Zs, ts
+end
+
+
