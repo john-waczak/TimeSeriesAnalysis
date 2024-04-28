@@ -40,6 +40,12 @@ end
 
 
 
+function r_expvar(σ; cutoff=0.9)
+    expvar = cumsum(σ ./ sum(σ))
+    return findfirst(expvar .> cutoff)
+end
+
+
 function r_cut(σ; ratio=0.01, rmax=15)
     return min(sum(σ ./ sum(σ) .> ratio) + 1, rmax)
 end
