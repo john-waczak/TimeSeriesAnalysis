@@ -63,7 +63,7 @@ end
 
 function load_data(df_path, t1, t2, col_to_use; interp=true)
     println("Loading data...")
-    df = CSV.read(datapath, DataFrame, select=[:datetime, col_to_use]);
+    df = CSV.read(df_path, DataFrame, select=[:datetime, col_to_use]);
 
     # find indices closest to t1 and t2
     idx_start = argmin([abs((Date(dt) - t1).value) for dt ∈ df.datetime])
