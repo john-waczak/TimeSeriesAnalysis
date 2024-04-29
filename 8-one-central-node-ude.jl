@@ -88,14 +88,6 @@ dt = ts[2] - ts[1]
 @assert dt == 1.0
 
 
-# Define parameters for HAVOK
-n_embedding = 100
-n_derivative = 5
-r_cutoff = 18
-n_control = 10
-r = r_cutoff + n_control - 1
-
-
 # construct Hankel Matrix
 H = TimeDelayEmbedding(Zs; method=:backward)
 
@@ -105,6 +97,15 @@ println("computing SVD... this could take a while")
 U, s, V = svd(H)
 Σ = diagm(s)
 @assert all(H .≈ U*Σ*V')  # verify that decomposition works
+
+
+# Define parameters for HAVOK
+n_embedding = 100
+n_derivative = 5
+r_cutoff = r_expvar(s, cutoff=0.99)
+# r_cutoff = 18
+n_control = 1
+r = r_cutoff + n_control - 1
 
 
 
@@ -177,7 +178,7 @@ t_train_end= dt*(9*24*60*60)
 idx_train = 1:findfirst(ts .≥ t_train_end)
 idx_test = (idx_train[end] + 1) : length(ts_x)
 #idx_train_short = 1:60*60
-idx_train_short = 1:5*60
+idx_train_short = 1:(5*60)
 
 ts_train  = ts_x[idx_train]
 ts_train_short  = ts_x[idx_train_short]
@@ -209,15 +210,20 @@ end
 
 
 # set up interpolation
-itps = [DataInterpolations.LinearInterpolation(Vr[:,j], ts_x; extrapolate=true) for j ∈ r-n_control+1:r]
+#itps = [DataInterpolations.LinearInterpolation(Vr[:,j], ts_x; extrapolate=true) for j ∈ r-n_control+1:r]
+itps = [DataInterpolations.CubicSpline(Vr[:,j], ts_x; extrapolate=true) for j ∈ r-n_control+1:r]
 forcing(t) = [itp(t) for itp ∈ itps]
+
+# try out forcing function
+forcing(ts_x[1])
+
 
 
 # Set up UDE
 rbf(x) = exp.(-(x .^ 2))
 
-act_func = rbf
-# act_func = relu
+# act_func = rbf
+act_func = relu
 # act_func = tanh
 
 
@@ -230,6 +236,15 @@ const NN = Lux.Chain(
     Lux.Dense(n_hidden, n_hidden, act_func),
     Lux.Dense(n_hidden, r - n_control)
 )
+
+# const NN = Lux.Chain(
+#     Lux.Dense(n_control, n_hidden,  act_func),
+#     Lux.Dense(n_hidden, n_hidden, act_func),
+#     Lux.Dense(n_hidden, n_hidden, act_func),
+#     Lux.Dense(n_hidden, r - n_control)
+# )
+
+
 
 # Get initial parameters and state of NN
 p, st = Lux.setup(rng, NN)
@@ -246,6 +261,7 @@ function ude_dynamics!(dx, x, p, t, A, B)
     # nn = NN(forcing(t), p, _st)[1]  # NN prediction
     nn = NN(x, p, _st)[1]  # NN prediction
     dx .= A*x + B*forcing(t) + nn
+    # dx .= A*x + nn
 end
 
 
@@ -332,20 +348,33 @@ optprob = Optimization.OptimizationProblem(optf, ComponentVector{Float64}(p))
 
 
 res1 = Optimization.solve(optprob, ADAM(), callback=callback, maxiters=5000)
-save(joinpath(fig_savepath, "model_params.jld2"), Dict(:ps_trained => res1.u, :st => _st))
+save(joinpath(fig_savepath, "model_params.jld2"), Dict("ps_trained" => res1.u, "st" => _st))
 
 
 # Train second round using LBFGS to get better minimum using derivative information
 optprob2 = Optimization.OptimizationProblem(optf, res1.u)
 res2 = Optimization.solve(optprob2, Optim.LBFGS(), callback=callback, maxiters=1000)
 
-save(joinpath(fig_savepath, "model_params.jld2"), Dict(:ps_trained => res2.u, :st => _st))
+save(joinpath(fig_savepath, "model_params.jld2"), Dict("ps_trained" => res2.u, "st" => _st))
 
 # Rename the best candidate
 p_trained = res2.u
 
 
 
+
+# test solve
+loss(p_trained)
+X̂ = predict(p_trained)
+
+Z_orig = H[1, idx_train_short]
+Ẑ = (U_small[1,:]' * diagm(σ_small) * X̂)'
+
+fig = Figure()
+ax = CairoMakie.Axis(fig[1,1])
+lines!(ax, Z_orig, label="Orig")
+lines!(ax, Ẑ, label="HAVOK")
+fig
 
 
 
