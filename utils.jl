@@ -1,12 +1,12 @@
 # Function for obtain Hankel Matrix of time-delay embeddings
-function TimeDelayEmbedding(z; nrow=100, method=:forward)
-    ncol = length(z) - nrow + 1
+function TimeDelayEmbedding(z; n_embedding=100, method=:forward)
+    ncol = length(z) - n_embedding + 1
 
     # allocate output
-    H = zeros(eltype(z), nrow, ncol)
+    H = zeros(eltype(z), n_embedding, ncol)
 
     for k ∈ 1:ncol
-        H[:,k] = z[k:k+nrow-1]
+        H[:,k] = z[k:k+n_embedding-1]
     end
 
     if method == :backward
