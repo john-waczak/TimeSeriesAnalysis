@@ -93,7 +93,7 @@ function eval_havok(Zs, ts, n_embedding, r_model, n_control; method=:backward)
 
 
     X = Vr
-    dX = zeros(size(Vr,1), r-n_control)
+    dX = zeros(size(Vr,1), r_model)
 
     for j ∈ axes(dX, 2)
         itp = CubicSpline(X[:,j], ts_x)
