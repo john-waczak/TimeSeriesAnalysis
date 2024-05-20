@@ -24,7 +24,7 @@ end
 
 
 d_start = Date(2021, 1, 1)
-d_end = Date(2024, 4, 18)
+d_end = Date(2024, 5, 15)
 
 nodes = [
     "Central Hub 4",
@@ -62,7 +62,7 @@ for node ∈ nodes
           |> range(start: $(d), stop: $(dend))
           |> filter(fn: (r) => r["device_name"] == "$(node)")
           |> filter(fn: (r) => r["_measurement"] == "BME680")
-          |> filter(fn: (r) => r["_field"] == "temperature" or r["_field"] == "pressure" or r["_field"] == "humidity" or r["_field"] == "dewPoint")
+          |> filter(fn: (r) => r["_field"] == "temperature" or r["_field"] == "pressure" or r["_field"] == "humidity")
           |> aggregateWindow(every: 1m, fn: mean)
           |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
           |> keep(columns: ["_time", "temperature", "pressure", "humidity"])
@@ -84,6 +84,7 @@ for node ∈ nodes
             df_out.to_csv(out_name)
         catch e
             println("Falure for $(node) on $(d)")
+            println(e)
         end
     end
 end
