@@ -31,9 +31,15 @@ if !ispath(fig_savepath)
     mkpath(fig_savepath)
 end
 
-c4_path = joinpath(datapath, "multi-sensor", "central-hub-4")
-c7_path = joinpath(datapath, "multi-sensor", "central-hub-7")
-c10_path = joinpath(datapath, "multi-sensor", "central-hub-10")
+outpath = "./data/output/1__havok-1min"
+if !ispath(outpath)
+    mkpath(outpath)
+end
+
+
+c4_path = joinpath(datapath, "central-hub-4")
+c7_path = joinpath(datapath, "central-hub-7")
+c10_path = joinpath(datapath, "central-hub-10")
 
 
 # load in CSVs and associated summaries
@@ -49,6 +55,8 @@ df10 = CSV.read(joinpath(c10_path, "df.csv"), DataFrame);
 df10_summary = CSV.read(joinpath(c10_path, "df_summary.csv"), DataFrame);
 
 
+df4_summary
+
 extrema(df4_summary.nrow)   # (1, 720)
 extrema(df7_summary.nrow)   # (1, 10606)   # <---- winner!
 extrema(df10_summary.nrow)  # (1, 1439)
@@ -58,13 +66,13 @@ df = df7[df7.group .== idx_winner, :]
 
 df.pressure .= 10 .* df.pressure
 
-
 cols_to_use = [:pm0_1, :pm0_3, :pm0_5, :pm1_0, :pm2_5, :pm5_0, :pm10_0, :temperature, :pressure, :humidity]
 col_names = ["PM 0.1", "PM 0.3", "PM 0.5", "PM 1.0", "PM 2.5", "PM 5.0", "PM 10.0", "Temperature", "Pressure", "Relative Humidity"]
 col_units = ["μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "μg/m³", "°C", "mbar", "%"]
 
 
 
+# let's focus on PM 2.5
 ts = df.dt .- df.dt[1]
 dt = ts[2]-ts[1]
 Zs = Array(df[:, :pm2_5])
@@ -74,15 +82,18 @@ fig = Figure();
 ax = CairoMakie.Axis(fig[1,1], xlabel="time (days)", ylabel="PM 2.5 (μg/m³)");
 lines!(ax, ts ./ (24*60), Zs, color=mints_colors[3])
 xlims!(ax, ts[1]/(24*60), ts[end]/(24*60))
-save(joinpath(fig_savepath, "1__time-series-orig.png"), fig)
-save(joinpath(fig_savepath, "1__time-series-orig.pdf"), fig)
 fig
 
+# # smooth with trialing 10 min average
+# trailing(Z, n) = [i < n ? mean(Z[1:i]) : mean(Z[i-n+1:i]) for i in 1:length(Z)]
+# Zs_smooth = trailing(Zs, 10)
 
 
-# smooth with trialing 10 min average
-trailing(Z, n) = [i < n ? mean(Z[1:i]) : mean(Z[i-n+1:i]) for i in 1:length(Z)]
-Zs_smooth = trailing(Zs, 10)
+# fig = Figure();
+# ax = CairoMakie.Axis(fig[1,1], xlabel="time (days)", ylabel="PM 2.5 (μg/m³)");
+# lines!(ax, ts ./ (24*60), Zs, color=mints_colors[3])
+# xlims!(ax, ts[1]/(24*60), ts[end]/(24*60))
+# fig
 
 
 function eval_havok(Zs, ts, n_embedding, r_model, n_control; method=:backward)
