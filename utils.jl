@@ -17,27 +17,11 @@ function TimeDelayEmbedding(z; n_embedding=100, method=:forward)
 end
 
 
-
-function parse_datetime(dt)
+function parse_datetime(dt, tz)
     dt_out = String(dt)
-
-    if occursin(".", dt)
-        try
-            # return ZonedDateTime(dt, "yyyy-mm-dd HH:MM:SS.sssssszzzz")
-            return DateTime(dt[1:end-6], dateformat"yyyy-mm-dd HH:MM:SS.ssssss")
-        catch e
-            return missing
-        end
-    else
-        try
-            # return ZonedDateTime(dt, "yyyy-mm-dd HH:MM:SSzzzz")
-            return DateTime(dt[1:end-6], dateformat"yyyy-mm-dd HH:MM:SS")
-        catch e
-            return missing
-        end
-    end
+    dt_out = ZonedDateTime(DateTime(split(dt, "Z")[1]), tz"UTC")
+    return  astimezone(dt_out, tz)
 end
-
 
 
 function r_expvar(σ; cutoff=0.9)
@@ -61,33 +45,63 @@ end
 
 
 
-function load_data(df_path, t1, t2, col_to_use; interp=true)
-    println("Loading data...")
-    df = CSV.read(df_path, DataFrame, select=[:datetime, col_to_use]);
 
-    # find indices closest to t1 and t2
-    idx_start = argmin([abs((Date(dt) - t1).value) for dt ∈ df.datetime])
-    idx_end = argmin([abs((Date(dt) - t2).value) for dt ∈ df.datetime])
 
-    # clip to t1 and t2
-    println("Clipping to $(t1)-$(t2)")
-    df = df[idx_start:idx_end,:]
+function eval_havok(Zs, ts, n_embedding, r_model, n_control; method=:backward)
+    r = r_model + n_control
 
-    # create a single dataset interpolated to every second
-    if interp
-        println("Interpolating to 1s")
-        zs_df = df[:, col_to_use];
-        ts_df = [(dt_f .- df.datetime[1]).value ./ 1000 for dt_f ∈ df.datetime];
-        z_itp = LinearInterpolation(zs_df, ts_df)
+    # cutoff time for training vs testing partition
+    Zs_x = Zs[n_embedding:end]
+    ts_x = range(ts[n_embedding], step=dt, length=length(Zs_x))
 
-        ts = ts_df[1]:ts_df[end]
-        Zs = z_itp.(ts)
-    else
-        ts = td_df
-        Zs = zd_df
+    # construct Hankel Matrix
+    H = TimeDelayEmbedding(Zs; n_embedding=n_embedding, method=method);
+
+    # Decompose via SVD
+    U, σ, V = svd(H)
+
+    # truncate the matrices
+    Vr = @view V[:,1:r]
+    Ur = @view U[:,1:r]
+    σr = @view σ[1:r]
+
+
+    X = Vr
+    dX = zeros(size(Vr,1), r_model)
+
+    for j ∈ axes(dX, 2)
+        itp = CubicSpline(X[:,j], ts_x)
+        for i ∈ axes(dX, 1)
+            dX[i,j] = DataInterpolations.derivative(itp, ts_x[i])
+        end
     end
 
-    return Zs, ts
-end
+    # Compute model matrix via least squares
+    Ξ = (X\dX)'  # now Ξx = dx for a single column vector view
+    A = Ξ[:, 1:r_model]   # State matrix A
+    B = Ξ[:, r_model+1:end]      # Control matrix B
 
+
+    # define interpolation function for forcing coordinate(s)
+    itps = [DataInterpolations.LinearInterpolation(Vr[:,j], ts_x; extrapolate=true) for j ∈ r_model+1:r];
+    forcing(t) = [itp(t) for itp ∈ itps]
+
+    params = (A, B)
+    x₀ = X[1,1:r_model]
+
+    # define function and integrate to get model predictions
+    function f!(dx, x, p, t)
+        A,B = p
+        dx .= A*x + B*forcing(t)
+    end
+
+    prob = ODEProblem(f!, x₀, (ts_x[1], ts_x[end]), params);
+    sol = solve(prob, saveat=ts_x);
+    X̂ = Array(sol)'
+
+    # reconstruct original time series
+    Ẑs_x = X̂ * diagm(σr[1:r_model]) * Ur[1,1:r_model]
+
+    return Zs_x, Ẑs_x, ts_x, (ts_x[1]:ts_x[end])
+end
 
